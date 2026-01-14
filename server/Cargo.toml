@@ -1,0 +1,18 @@
+[package]
+name = "vial-server"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "vial-server"
+path = "src/main.rs"
+
+[dependencies]
+vial-srv.workspace = true
+vial-shared.workspace = true
+tokio.workspace = true
+
+actix-web = "4.12.1"
+dotenvy = "0.15.7"
+log = "0.4.29"
+pretty_env_logger = "0.5.0"

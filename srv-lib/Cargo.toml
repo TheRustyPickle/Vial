@@ -1,0 +1,19 @@
+[package]
+name = "vial-srv"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+vial-shared.workspace = true
+chrono.workspace = true
+tokio.workspace = true
+
+diesel = { version = "2.3.5", features = ["chrono"] }
+diesel-async = { version = "0.7.4", features = ["bb8", "postgres"] }
+diesel_migrations = "2.3.1"
+rustls = { version = "0.23.36", features = ["ring"] }
+tokio-postgres = "0.7.15"
+futures-util = "0.3.31"
+tokio-postgres-rustls = "0.13.0"
+ulid = "1.2.1"
+thiserror = "2.0.17"
