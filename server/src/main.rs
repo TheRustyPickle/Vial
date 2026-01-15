@@ -46,7 +46,13 @@ async fn get_secret(id: Path<String>, db_handler: Data<Handler>) -> HttpResponse
     db_handler
         .get_secret(&id)
         .await
-        .map(|secret| HttpResponse::Ok().json(secret))
+        .map(|secret| {
+            if let Some(secret) = secret {
+                HttpResponse::Ok().json(secret)
+            } else {
+                HttpResponse::NotFound().body("secret not found")
+            }
+        })
         .unwrap_or_else(server_error_to_response)
 }
 

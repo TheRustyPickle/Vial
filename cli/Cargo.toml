@@ -11,6 +11,7 @@ path = "src/main.rs"
 vial-core.workspace = true
 vial-shared.workspace = true
 chrono.workspace = true
+serde.workspace = true
 
 reqwest = { version = "0.13.1", features = ["json", "blocking"] }
 clap = { version = "4.5.54", features = ["derive"] }

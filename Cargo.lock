@@ -2900,6 +2900,7 @@ dependencies = [
  "chrono",
  "clap",
  "reqwest",
+ "serde",
  "vial-core",
  "vial-shared",
 ]

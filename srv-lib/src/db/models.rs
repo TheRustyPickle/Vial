@@ -77,14 +77,24 @@ impl Secret {
             .await
     }
 
-    pub async fn get_secret(secret_id: &str, conn: &mut AsyncPgConnection) -> Result<Self, Error> {
+    pub async fn get_secret(
+        secret_id: &str,
+        conn: &mut AsyncPgConnection,
+    ) -> Result<Option<Self>, Error> {
         use crate::schema::secrets::dsl::*;
 
         let to_return = secrets
             .filter(id.eq(secret_id))
             .select(Self::as_select())
             .first(conn)
-            .await?;
+            .await
+            .optional()?;
+
+        if to_return.is_none() {
+            return Ok(None);
+        }
+
+        let to_return = to_return.unwrap();
 
         if let Some(view_count) = to_return.remaining_views {
             let new_count = view_count - 1;
@@ -107,7 +117,7 @@ impl Secret {
             }
         }
 
-        Ok(to_return)
+        Ok(Some(to_return))
     }
 
     pub async fn clear_expired(conn: &mut AsyncPgConnection) -> Result<usize, Error> {

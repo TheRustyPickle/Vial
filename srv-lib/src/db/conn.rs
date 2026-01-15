@@ -69,17 +69,17 @@ fn establish_connection(config: &str) -> BoxFuture<'_, ConnectionResult<AsyncPgC
 }
 
 impl Handler {
-    pub async fn get_secret(&self, id: &str) -> Result<EncryptedPayload, ServerError> {
+    pub async fn get_secret(&self, id: &str) -> Result<Option<EncryptedPayload>, ServerError> {
         let mut conn = self
             .conn
             .get()
             .await
             .map_err(|e| ServerError::DatabaseError(e.to_string()))?;
 
-        Ok(Secret::get_secret(id, &mut conn)
+        Secret::get_secret(id, &mut conn)
             .await
-            .map_err(|e| ServerError::DatabaseError(e.to_string()))?
-            .get_payload())
+            .map_err(|e| ServerError::DatabaseError(e.to_string()))
+            .map(|opt| opt.map(Secret::get_payload))
     }
 
     pub async fn clear_expired(&self) -> Result<(), ServerError> {

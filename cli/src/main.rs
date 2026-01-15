@@ -1,9 +1,8 @@
 use base64::{Engine as _, engine::general_purpose::URL_SAFE};
-use chrono::{Days, Timelike, Utc};
+use chrono::{Days, Utc};
 use clap::{Parser, Subcommand};
-use reqwest::Client;
 use vial_core::crypto::{decrypt_with_random_key, encrypt_with_random_key};
-use vial_shared::{CreateSecretRequest, SecretId};
+use vial_shared::{CreateSecretRequest, EncryptedPayload, SecretId};
 
 #[derive(Parser, Debug)]
 struct Cli {
@@ -53,6 +52,10 @@ const PAYLOAD_URL: &str = "http://127.0.0.1:8080/secrets";
 fn main() {
     let cli = Cli::parse();
 
+    let _ = run(cli);
+}
+
+fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
     match cli.command {
         Command::Send {
             text,
@@ -61,27 +64,27 @@ fn main() {
         } => {
             if view_count.is_none() && expire.is_none() {
                 println!("At least one of --view-count or --expire must be provided");
-                return;
+                return Ok(());
             }
 
             let mut expires_at = None;
             let mut max_views = None;
 
             if let Some(view_count) = view_count {
-                if view_count < 1 || view_count > 1000 {
+                if !(1..=1000).contains(&view_count) {
                     println!("--view-count must be between 1 and 1000");
-                    return;
+                    return Ok(());
                 }
                 max_views = Some(view_count);
             }
 
             if let Some(expire) = expire {
-                if expire < 1 || expire > 30 {
+                if !(1..=30).contains(&expire) {
                     println!("--expire must be between 1 and 30");
-                    return;
+                    return Ok(());
                 }
 
-                let expires_at = Some(Utc::now().naive_utc() + Days::new(expire as u64));
+                expires_at = Some(Utc::now().naive_utc() + Days::new(expire as u64));
             }
 
             let (blob, key) = encrypt_with_random_key(text.as_bytes()).unwrap();
@@ -94,51 +97,58 @@ fn main() {
 
             let client = reqwest::blocking::Client::new();
 
-            let result = client.post(PAYLOAD_URL).json(&secret_request).send();
-
-            if let Err(e) = result {
-                println!("Failed to create secret: {e}");
-                return;
-            }
-
-            let response = result.unwrap().error_for_status();
-
-            if let Err(e) = response {
-                println!("Failed to create secret: {e}");
-                return;
-            }
-
-            let response: Result<SecretId, reqwest::Error> = response.unwrap().json();
-
-            if let Err(e) = response {
-                println!("Failed to create secret: {e}");
-                return;
-            }
-
-            let secret_id = response.unwrap();
+            let secret_id: SecretId = reqwest_json(client.post(PAYLOAD_URL).json(&secret_request))
+                .map_err(|e| {
+                    println!("Failed to create secret: {e}");
+                    e
+                })?;
 
             let key_b64 = URL_SAFE.encode(key);
 
             let secret_link = format!("{PAYLOAD_URL}/{}#{key_b64}", secret_id.0);
 
-            // let blob_b64 = URL_SAFE.encode(blob);
-
-            // println!("Key: {key_b64}");
-            // println!("Blob: {blob_b64}");
-
-            // let key = URL_SAFE.decode(&key_b64).unwrap();
-            // let blob = URL_SAFE.decode(&blob_b64).unwrap();
-
-            // let arr_ref: &[u8; 32] = key
-            //     .as_slice()
-            //     .try_into()
-            //     .expect("Vector must be exactly 32 bytes");
-
-            // let decrypted = decrypt_with_random_key(blob.as_slice(), arr_ref).unwrap();
-            // println!("Decrypted: {}", String::from_utf8(decrypted).unwrap());
-
             println!("{secret_link}");
         }
-        Command::Recv { source } => println!("Receiving from: {}", source),
+        Command::Recv { source } => {
+            let Some(secret_id) = source.split("/").last() else {
+                println!("Could not find the secret id in the secret link.");
+                return Ok(());
+            };
+
+            let key = source.split("#").last();
+
+            let client = reqwest::blocking::Client::new();
+
+            let payload: EncryptedPayload =
+                reqwest_json(client.get(format!("{PAYLOAD_URL}/{secret_id}"))).map_err(|e| {
+                    println!("Failed to retrieve secret: {e}");
+                    e
+                })?;
+
+            if let Some(key) = key {
+                let decoded_key = URL_SAFE.decode(key).unwrap();
+
+                let arr_ref: Result<&[u8; 32], _> = decoded_key.as_slice().try_into();
+
+                if let Err(e) = arr_ref {
+                    println!("Is the key valid? {e}");
+                    return Ok(());
+                }
+
+                let arr_ref = arr_ref.unwrap();
+
+                let decrypted =
+                    decrypt_with_random_key(payload.payload.as_slice(), arr_ref).unwrap();
+
+                println!("Decrypted: {}", String::from_utf8(decrypted).unwrap());
+            }
+        }
     }
+    Ok(())
+}
+
+fn reqwest_json<T: serde::de::DeserializeOwned>(
+    req: reqwest::blocking::RequestBuilder,
+) -> Result<T, reqwest::Error> {
+    req.send()?.error_for_status()?.json()
 }
