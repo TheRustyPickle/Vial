@@ -1,7 +1,9 @@
 use base64::{Engine as _, engine::general_purpose::URL_SAFE};
 use chrono::{Days, Utc};
 use clap::{Parser, Subcommand};
-use vial_core::crypto::{decrypt_with_random_key, encrypt_with_random_key};
+use vial_core::crypto::{
+    decrypt_with_password, decrypt_with_random_key, encrypt_with_password, encrypt_with_random_key,
+};
 use vial_shared::{CreateSecretRequest, EncryptedPayload, SecretId};
 
 #[derive(Parser, Debug)]
@@ -34,6 +36,9 @@ enum Command {
         /// the secret will not expire based on time.
         #[arg(short = 'e', long, value_name = "DAYS")]
         expire: Option<i32>,
+
+        #[arg(short = 'p', long)]
+        password: bool,
     },
 
     /// Retrieve a secret from the server
@@ -44,6 +49,10 @@ enum Command {
         /// or a full URL returned by the `send` command.
         #[arg(long, value_name = "ID|URL")]
         source: String,
+        #[arg(short = 'p', long)]
+        password: bool,
+        #[arg(short = 'r', long)]
+        random_key: bool,
     },
 }
 
@@ -61,6 +70,7 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             text,
             view_count,
             expire,
+            password,
         } => {
             if view_count.is_none() && expire.is_none() {
                 println!("At least one of --view-count or --expire must be provided");
@@ -87,10 +97,26 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                 expires_at = Some(Utc::now().naive_utc() + Days::new(expire as u64));
             }
 
-            let (blob, key) = encrypt_with_random_key(text.as_bytes()).map_err(|e| {
-                println!("Failed to encrypt text: {e}");
-                e
-            })?;
+            let (blob, key) = if password {
+                let key = rpassword::prompt_password("Enter password: ").map_err(|e| {
+                    println!("Failed to read the password. {e}");
+                    e
+                })?;
+
+                let blob = encrypt_with_password(text.as_bytes(), &key).map_err(|e| {
+                    println!("Failed to encrypt text: {e}");
+                    e
+                })?;
+
+                (blob, None)
+            } else {
+                let (blob, key) = encrypt_with_random_key(text.as_bytes()).map_err(|e| {
+                    println!("Failed to encrypt text: {e}");
+                    e
+                })?;
+
+                (blob, Some(key))
+            };
 
             let secret_request = CreateSecretRequest {
                 ciphertext: blob,
@@ -106,19 +132,27 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                     e
                 })?;
 
-            let key_b64 = URL_SAFE.encode(key);
+            let secret_link = if password {
+                format!("{PAYLOAD_URL}/{}", secret_id.0)
+            } else {
+                let key_b64 = URL_SAFE.encode(key.unwrap());
 
-            let secret_link = format!("{PAYLOAD_URL}/{}#{key_b64}", secret_id.0);
+                format!("{PAYLOAD_URL}/{}#{key_b64}", secret_id.0)
+            };
 
             println!("{secret_link}");
         }
-        Command::Recv { source } => {
+        Command::Recv {
+            source,
+            password,
+            random_key,
+        } => {
             let Some(secret_id) = source.split("/").last() else {
                 println!("Could not find the secret id in the secret link.");
                 return Ok(());
             };
 
-            let key = source.split("#").last();
+            let key = source.split_once("#");
 
             let client = reqwest::blocking::Client::new();
 
@@ -128,29 +162,27 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                     e
                 })?;
 
-            if let Some(key) = key {
-                let decoded_key = URL_SAFE.decode(key).map_err(|e| {
-                    println!("Failed to decode key. Is the key valid? {e}");
+            let decrypted = if let Some((_, key)) = key {
+                decrypt_random_key(key, payload.payload)?
+            } else {
+                let key = rpassword::prompt_password("Enter key/password: ").map_err(|e| {
+                    println!("Failed to get key: {e}");
                     e
                 })?;
 
-                let arr_ref: &[u8; 32] = decoded_key.as_slice().try_into().inspect_err(|&e| {
-                    println!("Failed to decode key. Is the key valid? {e}");
-                })?;
+                // If password flag is set, use password
+                // If random key flag is set, use random key
+                // Otherwise, use password
+                if password {
+                    decrypt_password(&key, payload.payload)?
+                } else if random_key {
+                    decrypt_random_key(&key, payload.payload)?
+                } else {
+                    decrypt_password(&key, payload.payload)?
+                }
+            };
 
-                let decrypted = decrypt_with_random_key(payload.payload.as_slice(), arr_ref)
-                    .map_err(|e| {
-                        println!("Failed to decrypt secret: {e}");
-                        e
-                    })?;
-
-                let utf8_text = String::from_utf8(decrypted).map_err(|e| {
-                    println!("Failed to decode decrypted text: {e}");
-                    e
-                })?;
-
-                println!("Decrypted: {utf8_text}");
-            }
+            println!("{decrypted}");
         }
     }
     Ok(())
@@ -160,4 +192,41 @@ fn reqwest_json<T: serde::de::DeserializeOwned>(
     req: reqwest::blocking::RequestBuilder,
 ) -> Result<T, reqwest::Error> {
     req.send()?.error_for_status()?.json()
+}
+
+fn decrypt_random_key(key: &str, payload: Vec<u8>) -> Result<String, Box<dyn std::error::Error>> {
+    let decoded_key = URL_SAFE.decode(key).map_err(|e| {
+        println!("Failed to decode key. Is the key valid? {e}");
+        e
+    })?;
+
+    let arr_ref: &[u8; 32] = decoded_key.as_slice().try_into().inspect_err(|&e| {
+        println!("Failed to decode key. Is the key valid? {e}");
+    })?;
+
+    let decrypted = decrypt_with_random_key(payload.as_slice(), arr_ref).map_err(|e| {
+        println!("Failed to decrypt secret: {e}");
+        e
+    })?;
+
+    let utf8_text = String::from_utf8(decrypted).map_err(|e| {
+        println!("Failed to decode decrypted text: {e}");
+        e
+    })?;
+
+    Ok(utf8_text)
+}
+
+fn decrypt_password(key: &str, payload: Vec<u8>) -> Result<String, Box<dyn std::error::Error>> {
+    let decrypted = decrypt_with_password(payload.as_slice(), key).map_err(|e| {
+        println!("Failed to decrypt secret: {e}");
+        e
+    })?;
+
+    let utf8_text = String::from_utf8(decrypted).map_err(|e| {
+        println!("Failed to decode decrypted text: {e}");
+        e
+    })?;
+
+    Ok(utf8_text)
 }
