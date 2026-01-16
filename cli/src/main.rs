@@ -87,7 +87,10 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                 expires_at = Some(Utc::now().naive_utc() + Days::new(expire as u64));
             }
 
-            let (blob, key) = encrypt_with_random_key(text.as_bytes()).unwrap();
+            let (blob, key) = encrypt_with_random_key(text.as_bytes()).map_err(|e| {
+                println!("Failed to encrypt text: {e}");
+                e
+            })?;
 
             let secret_request = CreateSecretRequest {
                 ciphertext: blob,
@@ -126,21 +129,27 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                 })?;
 
             if let Some(key) = key {
-                let decoded_key = URL_SAFE.decode(key).unwrap();
+                let decoded_key = URL_SAFE.decode(key).map_err(|e| {
+                    println!("Failed to decode key. Is the key valid? {e}");
+                    e
+                })?;
 
-                let arr_ref: Result<&[u8; 32], _> = decoded_key.as_slice().try_into();
+                let arr_ref: &[u8; 32] = decoded_key.as_slice().try_into().inspect_err(|&e| {
+                    println!("Failed to decode key. Is the key valid? {e}");
+                })?;
 
-                if let Err(e) = arr_ref {
-                    println!("Is the key valid? {e}");
-                    return Ok(());
-                }
+                let decrypted = decrypt_with_random_key(payload.payload.as_slice(), arr_ref)
+                    .map_err(|e| {
+                        println!("Failed to decrypt secret: {e}");
+                        e
+                    })?;
 
-                let arr_ref = arr_ref.unwrap();
+                let utf8_text = String::from_utf8(decrypted).map_err(|e| {
+                    println!("Failed to decode decrypted text: {e}");
+                    e
+                })?;
 
-                let decrypted =
-                    decrypt_with_random_key(payload.payload.as_slice(), arr_ref).unwrap();
-
-                println!("Decrypted: {}", String::from_utf8(decrypted).unwrap());
+                println!("Decrypted: {utf8_text}");
             }
         }
     }
