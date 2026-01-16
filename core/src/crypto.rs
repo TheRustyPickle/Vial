@@ -22,7 +22,6 @@ pub fn encrypt_with_password(plaintext: &[u8], password: &str) -> Result<Vec<u8>
         )
         .map_err(|e| anyhow::anyhow!(e))?;
 
-    // 3. Encrypt
     let cipher = XChaCha20Poly1305::new_from_slice(&key_buffer)
         .map_err(|_| anyhow::anyhow!("Invalid key length"))?;
 
