@@ -37,6 +37,13 @@ enum Command {
         #[arg(short = 'e', long, value_name = "DAYS")]
         expire: Option<i32>,
 
+        /// Encrypt the secret using a user-provided password
+        ///
+        /// When set, you will be prompted for a password which
+        /// is used to encrypt the secret.
+        ///
+        /// If not set, a random key is generated automatically
+        /// and embedded into the returned link after the '#'.
         #[arg(short = 'p', long)]
         password: bool,
     },
@@ -49,8 +56,24 @@ enum Command {
         /// or a full URL returned by the `send` command.
         #[arg(long, value_name = "ID|URL")]
         source: String,
+
+        /// Decrypt using a user-provided password
+        ///
+        /// If the provided source does not contain a '#<key>'
+        /// fragment, you will be prompted for a password and
+        /// the secret will be decrypted using the password-based
+        /// encryption scheme.
+        ///
+        /// This is the default behavior when no key is found.
         #[arg(short = 'p', long)]
         password: bool,
+
+        /// Decrypt using a random key provided manually
+        ///
+        /// Use this when the secret was encrypted with a random
+        /// key and the link does not include the '#<key>' fragment.
+        ///
+        /// You will be prompted to enter the key manually.
         #[arg(short = 'r', long)]
         random_key: bool,
     },
