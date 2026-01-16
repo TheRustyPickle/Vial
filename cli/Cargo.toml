@@ -16,3 +16,4 @@ serde.workspace = true
 reqwest = { version = "0.13.1", features = ["json", "blocking"] }
 clap = { version = "4.5.54", features = ["derive"] }
 base64 = "0.22.1"
+rpassword = "7.4.0"
