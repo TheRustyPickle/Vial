@@ -170,12 +170,12 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             password,
             random_key,
         } => {
-            let Some(secret_id) = source.split("/").last() else {
+            let Some(secret_id) = source.split('/').last() else {
                 println!("Could not find the secret id in the secret link.");
                 return Ok(());
             };
 
-            let key = source.split_once("#");
+            let key = source.split_once('#');
 
             let client = reqwest::blocking::Client::new();
 

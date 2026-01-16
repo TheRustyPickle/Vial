@@ -69,7 +69,7 @@ impl Secret {
     }
 
     pub async fn insert(self, conn: &mut AsyncPgConnection) -> Result<usize, Error> {
-        use crate::schema::secrets::dsl::*;
+        use crate::schema::secrets::dsl::secrets;
 
         diesel::insert_into(secrets)
             .values(self)
@@ -81,7 +81,7 @@ impl Secret {
         secret_id: &str,
         conn: &mut AsyncPgConnection,
     ) -> Result<Option<Self>, Error> {
-        use crate::schema::secrets::dsl::*;
+        use crate::schema::secrets::dsl::{id, remaining_views, secrets};
 
         let to_return = secrets
             .filter(id.eq(secret_id))
@@ -121,7 +121,7 @@ impl Secret {
     }
 
     pub async fn clear_expired(conn: &mut AsyncPgConnection) -> Result<usize, Error> {
-        use crate::schema::secrets::dsl::*;
+        use crate::schema::secrets::dsl::{expires_at, secrets};
 
         diesel::delete(secrets.filter(expires_at.lt(Utc::now().naive_utc())))
             .execute(conn)

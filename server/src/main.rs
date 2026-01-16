@@ -41,7 +41,7 @@ async fn main() {
 
 async fn get_secret(id: Path<String>, db_handler: Data<Handler>) -> HttpResponse {
     let id = id.into_inner();
-    info!("Getting secret with id: {}", id);
+    info!("Getting secret with id: {id}");
 
     db_handler
         .get_secret(&id)
@@ -64,7 +64,7 @@ async fn create_secret(
         .new_secret(payload.into_inner())
         .await
         .map(|id| {
-            info!("Created secret with id: {}", id);
+            info!("Created secret with id: {id}");
             HttpResponse::Ok().json(id)
         })
         .unwrap_or_else(server_error_to_response)
@@ -77,7 +77,7 @@ fn server_error_to_response(e: ServerError) -> HttpResponse {
         | ServerError::InvalidViewCount => HttpResponse::BadRequest().body(e.to_string()),
 
         ServerError::DatabaseError(e) => {
-            error!("Database error: {}", e);
+            error!("Database error: {e}");
             HttpResponse::InternalServerError().body("internal server error")
         }
     }
