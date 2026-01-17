@@ -11,6 +11,7 @@ use rustls::RootCertStore;
 use rustls::pki_types::CertificateDer;
 use rustls::pki_types::pem::PemObject;
 use std::env::var;
+use std::fs::read;
 use tokio::time::Duration;
 use vial_shared::CreateSecretRequest;
 use vial_shared::EncryptedPayload;
@@ -41,7 +42,15 @@ pub async fn get_connection(url: &str) -> Handler {
         .await
         .unwrap();
 
-    Handler { conn }
+    let handler = Handler { conn };
+
+    let handler_clone = handler.clone();
+
+    tokio::spawn(async move {
+        handler_clone.initiate_expired_cleanup().await;
+    });
+
+    handler
 }
 
 fn establish_connection(config: &str) -> BoxFuture<'_, ConnectionResult<AsyncPgConnection>> {
@@ -49,8 +58,9 @@ fn establish_connection(config: &str) -> BoxFuture<'_, ConnectionResult<AsyncPgC
         let mut root_store = RootCertStore::empty();
 
         // Specifically for working with self signed certs.
-        if let Ok(certs) = var("CA_CERT") {
-            let cert = CertificateDer::from_pem_slice(certs.as_bytes()).unwrap();
+        if let Ok(cert_location) = var("CERT_LOCATION") {
+            let file_bytes = read(cert_location).unwrap();
+            let cert = CertificateDer::from_pem_slice(&file_bytes).unwrap();
             root_store.add(cert).unwrap();
         }
 
@@ -117,5 +127,12 @@ impl Handler {
             .map_err(|e| ServerError::DatabaseError(e.to_string()))?;
 
         Ok(secret_id)
+    }
+
+    async fn initiate_expired_cleanup(&self) {
+        loop {
+            tokio::time::sleep(Duration::from_secs(60)).await;
+            self.clear_expired().await.unwrap();
+        }
     }
 }
