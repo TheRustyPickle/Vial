@@ -4,7 +4,7 @@ use clap::{Parser, Subcommand};
 use vial_core::crypto::{
     decrypt_with_password, decrypt_with_random_key, encrypt_with_password, encrypt_with_random_key,
 };
-use vial_shared::{CreateSecretRequest, EncryptedPayload, SecretId};
+use vial_shared::{CreateSecretRequest, EncryptedPayload, FullSecretV1, Payload, SecretId};
 
 #[derive(Parser, Debug)]
 struct Cli {
@@ -120,26 +120,45 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                 expires_at = Some(Utc::now().naive_utc() + Days::new(expire as u64));
             }
 
+            let to_encrypt = FullSecretV1 {
+                text,
+                files: Vec::new(),
+            }
+            .to_payload()
+            .map_err(|e| {
+                println!("Failed to serialize secret: {e}");
+                e
+            })?
+            .to_bytes()
+            .map_err(|e| {
+                println!("Failed to serialize secret: {e}");
+                e
+            })?;
+
+            println!("Total bytes before encryption: {}", to_encrypt.len());
+
             let (blob, key) = if password {
                 let key = rpassword::prompt_password("Enter password: ").map_err(|e| {
                     println!("Failed to read the password. {e}");
                     e
                 })?;
 
-                let blob = encrypt_with_password(text.as_bytes(), &key).map_err(|e| {
+                let blob = encrypt_with_password(&to_encrypt, &key).map_err(|e| {
                     println!("Failed to encrypt text: {e}");
                     e
                 })?;
 
                 (blob, None)
             } else {
-                let (blob, key) = encrypt_with_random_key(text.as_bytes()).map_err(|e| {
+                let (blob, key) = encrypt_with_random_key(&to_encrypt).map_err(|e| {
                     println!("Failed to encrypt text: {e}");
                     e
                 })?;
 
                 (blob, Some(key))
             };
+
+            println!("Total bytes after encryption: {}.", blob.len());
 
             let secret_request = CreateSecretRequest {
                 ciphertext: blob,
@@ -170,7 +189,7 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             password,
             random_key,
         } => {
-            let Some(secret_id) = source.split('/').last() else {
+            let Some(secret_id) = source.split('/').next_back() else {
                 println!("Could not find the secret id in the secret link.");
                 return Ok(());
             };
@@ -205,7 +224,7 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                 }
             };
 
-            println!("{decrypted}");
+            println!("{}", decrypted.text);
         }
     }
     Ok(())
@@ -217,7 +236,10 @@ fn reqwest_json<T: serde::de::DeserializeOwned>(
     req.send()?.error_for_status()?.json()
 }
 
-fn decrypt_random_key(key: &str, payload: Vec<u8>) -> Result<String, Box<dyn std::error::Error>> {
+fn decrypt_random_key(
+    key: &str,
+    payload: Vec<u8>,
+) -> Result<FullSecretV1, Box<dyn std::error::Error>> {
     let decoded_key = URL_SAFE.decode(key).map_err(|e| {
         println!("Failed to decode key. Is the key valid? {e}");
         e
@@ -232,24 +254,39 @@ fn decrypt_random_key(key: &str, payload: Vec<u8>) -> Result<String, Box<dyn std
         e
     })?;
 
-    let utf8_text = String::from_utf8(decrypted).map_err(|e| {
-        println!("Failed to decode decrypted text: {e}");
-        e
-    })?;
+    let full_secret = Payload::from_bytes(decrypted)
+        .map_err(|e| {
+            println!("Failed to deserialize secret: {e}");
+            e
+        })?
+        .to_full_secret()
+        .map_err(|e| {
+            println!("Failed to deserialize secret: {e}");
+            e
+        })?;
 
-    Ok(utf8_text)
+    Ok(full_secret)
 }
 
-fn decrypt_password(key: &str, payload: Vec<u8>) -> Result<String, Box<dyn std::error::Error>> {
+fn decrypt_password(
+    key: &str,
+    payload: Vec<u8>,
+) -> Result<FullSecretV1, Box<dyn std::error::Error>> {
     let decrypted = decrypt_with_password(payload.as_slice(), key).map_err(|e| {
         println!("Failed to decrypt secret: {e}");
         e
     })?;
 
-    let utf8_text = String::from_utf8(decrypted).map_err(|e| {
-        println!("Failed to decode decrypted text: {e}");
-        e
-    })?;
+    let full_secret = Payload::from_bytes(decrypted)
+        .map_err(|e| {
+            println!("Failed to deserialize secret: {e}");
+            e
+        })?
+        .to_full_secret()
+        .map_err(|e| {
+            println!("Failed to deserialize secret: {e}");
+            e
+        })?;
 
-    Ok(utf8_text)
+    Ok(full_secret)
 }
