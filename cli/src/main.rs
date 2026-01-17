@@ -1,6 +1,7 @@
 use base64::{Engine as _, engine::general_purpose::URL_SAFE};
 use chrono::{Days, Utc};
 use clap::{Parser, Subcommand};
+use std::fs::read;
 use std::io::{Write as _, stdin, stdout};
 use std::path::{Path, PathBuf};
 use vial_core::crypto::{
@@ -145,7 +146,7 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
                     continue;
                 }
 
-                let content = std::fs::read(&path)?;
+                let content = read(&path)?;
                 let filename = path.file_name().unwrap().to_string_lossy().to_string();
 
                 files.push(log_err(
