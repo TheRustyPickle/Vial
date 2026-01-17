@@ -113,153 +113,169 @@ fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
             expire,
             password,
             attachments,
-        } => {
-            if view_count.is_none() && expire.is_none() {
-                println!("At least one of --view-count or --expire must be provided");
-                return Ok(());
-            }
-
-            let mut expires_at = None;
-            let mut max_views = None;
-
-            if let Some(view_count) = view_count {
-                if !(1..=1000).contains(&view_count) {
-                    println!("--view-count must be between 1 and 1000");
-                    return Ok(());
-                }
-                max_views = Some(view_count);
-            }
-
-            if let Some(expire) = expire {
-                if !(1..=30).contains(&expire) {
-                    println!("--expire must be between 1 and 30");
-                    return Ok(());
-                }
-
-                expires_at = Some(Utc::now().naive_utc() + Days::new(expire as u64));
-            }
-
-            let mut files = Vec::with_capacity(attachments.len());
-
-            for path in attachments {
-                if !path.is_file() {
-                    continue;
-                }
-
-                let content = read(&path)?;
-                let filename = path.file_name().unwrap().to_string_lossy().to_string();
-
-                files.push(log_err(
-                    SecretFileV1::new(filename, content),
-                    "Failed to serialize file",
-                )?);
-            }
-
-            let to_encrypt = FullSecretV1 { text, files }
-                .to_payload()
-                .map_err(|e| {
-                    println!("Failed to serialize secret: {e}");
-                    e
-                })?
-                .to_bytes()
-                .map_err(|e| {
-                    println!("Failed to serialize secret: {e}");
-                    e
-                })?;
-
-            let (blob, key) = if password {
-                let key = log_err(
-                    rpassword::prompt_password("Enter password: "),
-                    "Failed to read the password",
-                )?;
-
-                let blob = log_err(
-                    encrypt_with_password(&to_encrypt, &key),
-                    "Failed to encrypt",
-                )?;
-
-                (blob, None)
-            } else {
-                let (blob, key) =
-                    log_err(encrypt_with_random_key(&to_encrypt), "Failed to encrypt")?;
-
-                (blob, Some(key))
-            };
-
-            if blob.len() > MAX_SIZE {
-                println!(
-                    "The secret is too large to be sent. Try breaking it up. Max limit is {MAX_SIZE} bytes."
-                );
-            }
-
-            let secret_request = CreateSecretRequest {
-                ciphertext: blob,
-                expires_at,
-                max_views,
-            };
-
-            let client = reqwest::blocking::Client::new();
-
-            let secret_id: SecretId = log_err(
-                reqwest_json(client.post(PAYLOAD_URL).json(&secret_request)),
-                "Failed to create secret",
-            )?;
-
-            let secret_link = if password {
-                format!("{PAYLOAD_URL}/{}", secret_id.0)
-            } else {
-                let key_b64 = URL_SAFE.encode(key.unwrap());
-
-                format!("{PAYLOAD_URL}/{}#{key_b64}", secret_id.0)
-            };
-
-            println!("{secret_link}");
-        }
+        } => send(text, view_count, expire, password, attachments)?,
         Command::Recv {
             source,
             password,
             random_key,
-        } => {
-            let Some(secret_id) = source.split('/').next_back() else {
-                println!("Could not find the secret id in the secret link.");
-                return Ok(());
-            };
+        } => receive(source, password, random_key)?,
+    }
+    Ok(())
+}
 
-            let key = source.split_once('#');
+fn send(
+    text: String,
+    view_count: Option<i32>,
+    expire: Option<i32>,
+    password: bool,
+    attachments: Vec<PathBuf>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if view_count.is_none() && expire.is_none() {
+        println!("At least one of --view-count or --expire must be provided");
+        return Ok(());
+    }
 
-            let client = reqwest::blocking::Client::new();
+    let mut expires_at = None;
+    let mut max_views = None;
 
-            let payload: EncryptedPayload = log_err(
-                reqwest_json(client.get(format!("{PAYLOAD_URL}/{secret_id}"))),
-                "Failed to retrieve secret",
-            )?;
-
-            let decrypted = if let Some((_, key)) = key {
-                decrypt_random_key(key, payload.payload)?
-            } else {
-                let key = log_err(
-                    rpassword::prompt_password("Enter key/password: "),
-                    "Failed to get the key",
-                )?;
-
-                // If password flag is set, use password
-                // If random key flag is set, use random key
-                // Otherwise, use password
-                if password {
-                    decrypt_password(&key, payload.payload)?
-                } else if random_key {
-                    decrypt_random_key(&key, payload.payload)?
-                } else {
-                    decrypt_password(&key, payload.payload)?
-                }
-            };
-
-            println!("{}", decrypted.text);
-
-            for file in decrypted.files {
-                log_err(save_file(file), "Failed to save file")?;
-            }
+    if let Some(view_count) = view_count {
+        if !(1..=1000).contains(&view_count) {
+            println!("--view-count must be between 1 and 1000");
+            return Ok(());
         }
+        max_views = Some(view_count);
+    }
+
+    if let Some(expire) = expire {
+        if !(1..=30).contains(&expire) {
+            println!("--expire must be between 1 and 30");
+            return Ok(());
+        }
+
+        expires_at = Some(Utc::now().naive_utc() + Days::new(expire as u64));
+    }
+
+    let mut files = Vec::with_capacity(attachments.len());
+
+    for path in attachments {
+        if !path.is_file() {
+            continue;
+        }
+
+        let content = read(&path)?;
+        let filename = path.file_name().unwrap().to_string_lossy().to_string();
+
+        files.push(log_err(
+            SecretFileV1::new(&filename, content),
+            "Failed to serialize file",
+        )?);
+    }
+
+    let to_encrypt = FullSecretV1 { text, files }
+        .to_payload()
+        .map_err(|e| {
+            println!("Failed to serialize secret: {e}");
+            e
+        })?
+        .to_bytes()
+        .map_err(|e| {
+            println!("Failed to serialize secret: {e}");
+            e
+        })?;
+
+    let (blob, key) = if password {
+        let key = log_err(
+            rpassword::prompt_password("Enter password: "),
+            "Failed to read the password",
+        )?;
+
+        let blob = log_err(
+            encrypt_with_password(&to_encrypt, &key),
+            "Failed to encrypt",
+        )?;
+
+        (blob, None)
+    } else {
+        let (blob, key) = log_err(encrypt_with_random_key(&to_encrypt), "Failed to encrypt")?;
+
+        (blob, Some(key))
+    };
+
+    if blob.len() > MAX_SIZE {
+        println!(
+            "The secret is too large to be sent. Try breaking it up. Max limit is {MAX_SIZE} bytes."
+        );
+    }
+
+    let secret_request = CreateSecretRequest {
+        ciphertext: blob,
+        expires_at,
+        max_views,
+    };
+
+    let client = reqwest::blocking::Client::new();
+
+    let secret_id: SecretId = log_err(
+        reqwest_json(client.post(PAYLOAD_URL).json(&secret_request)),
+        "Failed to create secret",
+    )?;
+
+    let secret_link = if password {
+        format!("{PAYLOAD_URL}/{}", secret_id.0)
+    } else {
+        let key_b64 = URL_SAFE.encode(key.unwrap());
+
+        format!("{PAYLOAD_URL}/{}#{key_b64}", secret_id.0)
+    };
+
+    println!("{secret_link}");
+
+    Ok(())
+}
+
+fn receive(
+    source: String,
+    password: bool,
+    random_key: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let Some(secret_id) = source.split('/').next_back() else {
+        println!("Could not find the secret id in the secret link.");
+        return Ok(());
+    };
+
+    let key = source.split_once('#');
+
+    let client = reqwest::blocking::Client::new();
+
+    let payload: EncryptedPayload = log_err(
+        reqwest_json(client.get(format!("{PAYLOAD_URL}/{secret_id}"))),
+        "Failed to retrieve secret",
+    )?;
+
+    let decrypted = if let Some((_, key)) = key {
+        decrypt_random_key(key, &payload.payload)?
+    } else {
+        let key = log_err(
+            rpassword::prompt_password("Enter key/password: "),
+            "Failed to get the key",
+        )?;
+
+        // If password flag is set, use password
+        // If random key flag is set, use random key
+        // Otherwise, use password
+        if password {
+            decrypt_password(&key, &payload.payload)?
+        } else if random_key {
+            decrypt_random_key(&key, &payload.payload)?
+        } else {
+            decrypt_password(&key, &payload.payload)?
+        }
+    };
+
+    println!("{}", decrypted.text);
+
+    for file in decrypted.files {
+        log_err(save_file(&file), "Failed to save file")?;
     }
     Ok(())
 }
@@ -272,14 +288,14 @@ fn reqwest_json<T: serde::de::DeserializeOwned>(
 
 fn log_err<T, E: std::fmt::Display>(res: Result<T, E>, context: &str) -> Result<T, E> {
     res.map_err(|e| {
-        println!("{}: {}", context, e);
+        println!("{context}: {e}");
         e
     })
 }
 
 fn decrypt_random_key(
     key: &str,
-    payload: Vec<u8>,
+    payload: &[u8],
 ) -> Result<FullSecretV1, Box<dyn std::error::Error>> {
     let decoded_key = log_err(
         URL_SAFE.decode(key),
@@ -292,7 +308,7 @@ fn decrypt_random_key(
     )?;
 
     let decrypted = log_err(
-        decrypt_with_random_key(payload.as_slice(), arr_ref),
+        decrypt_with_random_key(payload, arr_ref),
         "Failed to decrypt secret",
     )?;
 
@@ -310,12 +326,9 @@ fn decrypt_random_key(
     Ok(full_secret)
 }
 
-fn decrypt_password(
-    key: &str,
-    payload: Vec<u8>,
-) -> Result<FullSecretV1, Box<dyn std::error::Error>> {
+fn decrypt_password(key: &str, payload: &[u8]) -> Result<FullSecretV1, Box<dyn std::error::Error>> {
     let decrypted = log_err(
-        decrypt_with_password(payload.as_slice(), key),
+        decrypt_with_password(payload, key),
         "Failed to decrypt secret",
     )?;
 
@@ -333,7 +346,7 @@ fn decrypt_password(
     Ok(full_secret)
 }
 
-fn save_file(file: SecretFileV1) -> Result<(), Box<dyn std::error::Error>> {
+fn save_file(file: &SecretFileV1) -> Result<(), Box<dyn std::error::Error>> {
     let path = Path::new(file.filename());
 
     // If path exists, try to save the file by adding (x) number, at most 10 times.

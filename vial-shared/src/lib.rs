@@ -23,8 +23,8 @@ pub struct CreateSecretRequest {
 /// Once the bytes gets decrypted, should be deserialized to this struct.
 /// Similarly, before encrypting, this struct is serialized to bytes.
 ///
-/// After deserializing, the bytes can be deserialized to FullSecretV1 struct.
-/// Similarly, payload is generated from the serialized FullSecretV1 struct.
+/// After deserializing, the bytes can be deserialized to `FullSecretV1` struct.
+/// Similarly, payload is generated from the serialized `FullSecretV1` struct.
 #[derive(Deserialize, Serialize)]
 pub struct Payload {
     pub version: u8,
@@ -32,7 +32,7 @@ pub struct Payload {
 }
 
 impl Payload {
-    pub fn new(full_secret: FullSecretV1) -> Result<Self, postcard::Error> {
+    pub fn new(full_secret: &FullSecretV1) -> Result<Self, postcard::Error> {
         let payload = full_secret.to_bytes()?;
         Ok(Self {
             payload,
@@ -66,8 +66,8 @@ pub struct SecretFileV1 {
 }
 
 impl SecretFileV1 {
-    pub fn new(filename: String, content: Vec<u8>) -> Result<Self, Box<dyn std::error::Error>> {
-        let safe_filename = sanitize_filename(&filename)?;
+    pub fn new(filename: &str, content: Vec<u8>) -> Result<Self, Box<dyn std::error::Error>> {
+        let safe_filename = sanitize_filename(filename)?;
 
         if content.is_empty() {
             return Err("File is empty".into());
@@ -79,10 +79,12 @@ impl SecretFileV1 {
         })
     }
 
+    #[must_use]
     pub fn filename(&self) -> &str {
         &self.filename
     }
 
+    #[must_use]
     pub fn content(&self) -> &[u8] {
         &self.content
     }
@@ -122,7 +124,7 @@ pub fn sanitize_filename(name: &str) -> Result<String, &'static str> {
 
     let file_name = file_name.to_str().ok_or("Filename is not valid UTF-8")?;
 
-    if file_name.is_empty() || file_name == "." || file_name == ".." {
+    if file_name.is_empty() || file_name == "." || file_name == ".." || !path.is_file() {
         return Err("Invalid filename");
     }
 
