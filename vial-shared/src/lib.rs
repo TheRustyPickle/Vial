@@ -86,6 +86,11 @@ impl SecretFileV1 {
     pub fn content(&self) -> &[u8] {
         &self.content
     }
+
+    pub fn write(&self, path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+        std::fs::write(path, self.content())?;
+        Ok(())
+    }
 }
 
 impl FullSecretV1 {
@@ -106,7 +111,7 @@ impl FullSecretV1 {
     }
 }
 
-fn sanitize_filename(name: &str) -> Result<String, &'static str> {
+pub fn sanitize_filename(name: &str) -> Result<String, &'static str> {
     let path = Path::new(name);
 
     if path.components().count() != 1 {
