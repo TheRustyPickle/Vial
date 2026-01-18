@@ -1,9 +1,10 @@
 use anyhow::{Context, Result, anyhow};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE};
 use chrono::{Days, Utc};
-use clap::{Parser, Subcommand};
+use clap::{Args, Parser, Subcommand};
 use dirs::config_dir;
 use serde::{Deserialize, Serialize};
+use std::env::set_current_dir;
 use std::fs::{File, create_dir_all, read};
 use std::io::{Write as _, stdin, stdout};
 use std::path::{Path, PathBuf};
@@ -16,6 +17,7 @@ use vial_shared::{
 };
 
 const MAX_SIZE: usize = 1024 * 1024 * 5 + 200;
+const DEFAULT_URL: &str = "http://127.0.0.1:8080/secrets";
 
 #[derive(Parser, Debug)]
 struct Cli {
@@ -23,7 +25,7 @@ struct Cli {
     command: Command,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Default)]
 struct Config {
     download_path: Option<PathBuf>,
     server_url: Option<String>,
@@ -35,9 +37,10 @@ impl Config {
         let mut target_path = config_dir().unwrap();
 
         target_path.push("Vial");
-        target_path.push("vial.json");
 
-        create_dir_all(&target_path).unwrap();
+        create_dir_all(&target_path)?;
+
+        target_path.push("vial.json");
 
         if target_path.exists() {
             let contents = read(target_path)?;
@@ -49,16 +52,53 @@ impl Config {
                 max_size: None,
             };
 
-            File::create(target_path)?.write_all(serde_json::to_string(&config)?.as_bytes())?;
+            config.save_config()?;
 
             Ok(config)
         }
+    }
+
+    fn set_download_path(&mut self, path: PathBuf) -> Result<()> {
+        self.download_path = Some(path);
+
+        self.save_config()?;
+
+        Ok(())
+    }
+
+    fn set_server_url(&mut self, url: String) -> Result<()> {
+        self.server_url = Some(url);
+
+        self.save_config()?;
+
+        Ok(())
+    }
+
+    fn set_max_size(&mut self, size: usize) -> Result<()> {
+        self.max_size = Some(size);
+
+        self.save_config()?;
+
+        Ok(())
+    }
+
+    fn save_config(&self) -> Result<()> {
+        let mut target_path = config_dir().unwrap();
+
+        target_path.push("Vial");
+
+        target_path.push("vial.json");
+
+        let mut file = File::create(target_path)?;
+        serde_json::to_writer(&mut file, self)?;
+        Ok(())
     }
 }
 
 #[derive(Subcommand, Debug)]
 enum Command {
     /// Send a new secret to the server
+    #[command(arg_required_else_help = true)]
     Send {
         /// The secret content to store
         ///
@@ -103,6 +143,7 @@ enum Command {
     },
 
     /// Retrieve a secret from the server
+    #[command(arg_required_else_help = true)]
     Recv {
         /// Secret identifier or full URL
         ///
@@ -131,18 +172,56 @@ enum Command {
         #[arg(short = 'r', long)]
         random_key: bool,
     },
+
+    /// Show or configure the current configuration
+    #[command(arg_required_else_help = true)]
+    Config(ConfigArgs),
 }
 
-const PAYLOAD_URL: &str = "http://127.0.0.1:8080/secrets";
+#[derive(Args, Debug)]
+pub struct ConfigArgs {
+    /// Show the current configuration and exit
+    ///
+    /// Prints all resolved configuration values, including defaults.
+    #[arg(short, long)]
+    pub show: bool,
+
+    /// Set the default download directory for received files
+    ///
+    /// Defaults to the current working directory.
+    /// The directory will be created if it does not exist.
+    #[arg(long, value_name = "PATH")]
+    pub set_download_path: Option<PathBuf>,
+
+    /// Set the secrets API base URL
+    ///
+    /// This must be the endpoint that accepts:
+    ///
+    /// POST to create a new secret
+    ///
+    /// GET /{id} to retrieve an existing secret
+    ///
+    /// Example:
+    ///   http://127.0.0.1:8080/secrets
+    ///
+    /// Defaults to http://127.0.0.1:8080/secrets
+    #[arg(long, value_name = "URL")]
+    pub set_server_url: Option<String>,
+
+    /// Set the maximum allowed secret size (in bytes)
+    ///
+    /// Defaults to 5 MB plus a small overhead for encryption metadata.
+    ///
+    /// Example values:
+    /// 5242880 (5 MB)
+    /// 10485760 (10 MB)
+    #[arg(long, value_name = "BYTES")]
+    pub set_max_size: Option<usize>,
+}
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    run(cli)?;
 
-    Ok(())
-}
-
-fn run(cli: Cli) -> Result<()> {
     match cli.command {
         Command::Send {
             text,
@@ -156,7 +235,11 @@ fn run(cli: Cli) -> Result<()> {
             password,
             random_key,
         } => receive(source, password, random_key)?,
+        Command::Config(args) => {
+            config(args)?;
+        }
     }
+
     Ok(())
 }
 
@@ -191,6 +274,10 @@ fn send(
         expires_at = Some(Utc::now().naive_utc() + Days::new(expire as u64));
     }
 
+    let config = Config::get_config()
+        .context("Failed to read config")
+        .unwrap_or_default();
+
     let mut files = Vec::with_capacity(attachments.len());
 
     for path in attachments {
@@ -222,11 +309,33 @@ fn send(
 
         (blob, None)
     } else {
-        let (blob, key) =
-            encrypt_with_random_key(&to_encrypt).context("Failed to encrypt with the random key schema")?;
+        let (blob, key) = encrypt_with_random_key(&to_encrypt)
+            .context("Failed to encrypt with the random key schema")?;
 
         (blob, Some(key))
     };
+
+    // Only accept the size in the config if a different server is used than the default one
+    let max_size = if let Some(max_size) = config.max_size
+        && let Some(url) = &config.server_url
+        && url != DEFAULT_URL
+    {
+        max_size
+    } else {
+        MAX_SIZE
+    };
+
+    let post_url = if let Some(url) = config.server_url {
+        url
+    } else {
+        DEFAULT_URL.to_string()
+    };
+
+    if blob.len() > max_size {
+        return Err(anyhow!(
+            "The secret is too large to be sent. Try breaking it up. Max limit is {max_size} bytes."
+        ));
+    }
 
     if blob.len() > MAX_SIZE {
         return Err(anyhow!(
@@ -242,15 +351,15 @@ fn send(
 
     let client = reqwest::blocking::Client::new();
 
-    let secret_id: SecretId = reqwest_json(client.post(PAYLOAD_URL).json(&secret_request))
+    let secret_id: SecretId = reqwest_json(client.post(&post_url).json(&secret_request))
         .context("Failed to create new secret")?;
 
     let secret_link = if password {
-        format!("{PAYLOAD_URL}/{}", secret_id.0)
+        format!("{post_url}/{}", secret_id.0)
     } else {
         let key_b64 = URL_SAFE.encode(key.unwrap());
 
-        format!("{PAYLOAD_URL}/{}#{key_b64}", secret_id.0)
+        format!("{post_url}/{}#{key_b64}", secret_id.0)
     };
 
     println!("{secret_link}");
@@ -263,11 +372,21 @@ fn receive(source: String, password: bool, random_key: bool) -> Result<()> {
         return Err(anyhow!("Could not find the secret id in the secret link."));
     };
 
+    let config = Config::get_config()
+        .context("Failed to read config")
+        .unwrap_or_default();
+
+    let post_url = if let Some(url) = config.server_url {
+        url
+    } else {
+        DEFAULT_URL.to_string()
+    };
+
     let key = source.split_once('#');
 
     let client = reqwest::blocking::Client::new();
 
-    let payload: EncryptedPayload = reqwest_json(client.get(format!("{PAYLOAD_URL}/{secret_id}")))
+    let payload: EncryptedPayload = reqwest_json(client.get(format!("{post_url}/{secret_id}")))
         .context("Failed to fetch the secret")?;
 
     let decrypted = if let Some((_, key)) = key {
@@ -295,8 +414,39 @@ fn receive(source: String, password: bool, random_key: bool) -> Result<()> {
     println!("{}", decrypted.text);
 
     for file in decrypted.files {
-        save_file(&file).context("Failed to save file")?;
+        save_file(&file, &config.download_path).context("Failed to save file")?;
     }
+    Ok(())
+}
+
+fn config(args: ConfigArgs) -> Result<()> {
+    let mut config = Config::get_config().context("Failed to get config")?;
+
+    if let Some(dl_path) = args.set_download_path {
+        config
+            .set_download_path(dl_path.clone())
+            .with_context(|| format!("Failed to set new download path {}", dl_path.display()))?;
+    }
+
+    if let Some(url) = args.set_server_url {
+        config
+            .set_server_url(url.clone())
+            .with_context(|| format!("Failed to set new server url {}", url))?;
+    }
+
+    if let Some(size) = args.set_max_size {
+        config
+            .set_max_size(size)
+            .with_context(|| format!("Failed to set new max size {}", size))?;
+    }
+
+    if args.show {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&config).context("Failed to serialize config")?
+        );
+    }
+
     Ok(())
 }
 
@@ -338,7 +488,12 @@ fn decrypt_password(key: &str, payload: &[u8]) -> Result<FullSecretV1> {
     Ok(full_secret)
 }
 
-fn save_file(file: &SecretFileV1) -> Result<()> {
+fn save_file(file: &SecretFileV1, download_path: &Option<PathBuf>) -> Result<()> {
+    if let Some(path) = download_path {
+        set_current_dir(path)
+            .with_context(|| format!("Failed to change directory to {}", path.display()))?;
+    }
+
     let path = Path::new(file.filename());
 
     // If path exists, try to save the file by adding (x) number, at most 10 times.
