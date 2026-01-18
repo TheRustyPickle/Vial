@@ -62,7 +62,13 @@ async fn create_secret(
     payload: Json<CreateSecretRequest>,
 ) -> HttpResponse {
     let payload = payload.into_inner();
-    if payload.ciphertext.len() > MAX_SIZE {
+
+    let max_size = var("MAX_SIZE")
+        .ok()
+        .and_then(|p| p.parse::<usize>().ok())
+        .unwrap_or(MAX_SIZE);
+
+    if payload.ciphertext.len() > max_size {
         return HttpResponse::PayloadTooLarge()
             .body("Payload too large. Max size is {MAX_SIZE} bytes");
     }
