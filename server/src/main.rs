@@ -6,6 +6,8 @@ use vial_shared::CreateSecretRequest;
 use vial_srv::db::{Handler, get_connection};
 use vial_srv::errors::ServerError;
 
+const MAX_SIZE: usize = 1024 * 1024 * 5 + 200;
+
 #[actix_web::main]
 async fn main() {
     dotenvy::dotenv().ok();
@@ -59,8 +61,13 @@ async fn create_secret(
     db_handler: Data<Handler>,
     payload: Json<CreateSecretRequest>,
 ) -> HttpResponse {
+    let payload = payload.into_inner();
+    if payload.ciphertext.len() > MAX_SIZE {
+        return HttpResponse::PayloadTooLarge()
+            .body("Payload too large. Max size is {MAX_SIZE} bytes");
+    }
     db_handler
-        .new_secret(payload.into_inner())
+        .new_secret(payload)
         .await
         .map_or_else(server_error_to_response, |id| {
             info!("Created secret with id: {id}");
