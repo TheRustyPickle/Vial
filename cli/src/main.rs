@@ -223,7 +223,7 @@ fn send(
         (blob, None)
     } else {
         let (blob, key) =
-            encrypt_with_random_key(&to_encrypt).context("Failed to encrypt with a random key")?;
+            encrypt_with_random_key(&to_encrypt).context("Failed to encrypt with the random key schema")?;
 
         (blob, Some(key))
     };
@@ -260,8 +260,7 @@ fn send(
 
 fn receive(source: String, password: bool, random_key: bool) -> Result<()> {
     let Some(secret_id) = source.split('/').next_back() else {
-        println!("Could not find the secret id in the secret link.");
-        return Ok(());
+        return Err(anyhow!("Could not find the secret id in the secret link."));
     };
 
     let key = source.split_once('#');
@@ -283,13 +282,13 @@ fn receive(source: String, password: bool, random_key: bool) -> Result<()> {
         // Otherwise, use password
         if password {
             decrypt_password(&key, &payload.payload)
-                .context("Failed to decrypto using password schema")?
+                .context("Failed to decrypt using password schema")?
         } else if random_key {
             decrypt_random_key(&key, &payload.payload)
-                .context("Failed to decrypto using random key schema")?
+                .context("Failed to decrypt using random key schema")?
         } else {
             decrypt_password(&key, &payload.payload)
-                .context("Failed to decrypto using password schema")?
+                .context("Failed to decrypt using password schema")?
         }
     };
 
@@ -353,8 +352,9 @@ fn save_file(file: &SecretFileV1) -> Result<()> {
             let new_path = Path::new(&new_file_name);
 
             if !new_path.exists() {
-                file.write(new_path)
-                    .map_err(|e| anyhow!("Failed to save file: {e}"))?;
+                file.write(new_path).map_err(|e| {
+                    anyhow!("Failed to save file at path {}: {e}", new_path.display())
+                })?;
 
                 println!("Saved file to {}", new_path.display());
                 successful = true;
@@ -370,22 +370,26 @@ fn save_file(file: &SecretFileV1) -> Result<()> {
 
             let filename = filename.trim();
             let safe_filename = sanitize_filename(filename)
-                .map_err(|e| anyhow!("Failed to sanitize filename: {e}"))?;
+                .map_err(|e| anyhow!("Failed to sanitize filename {filename}: {e}"))?;
 
             let new_path = Path::new(&safe_filename);
 
             if new_path.exists() {
                 println!("File already exists.");
             } else {
-                file.write(new_path)
-                    .map_err(|e| anyhow!("Failed to save file: {e}"))?;
+                file.write(new_path).map_err(|e| {
+                    anyhow!(
+                        "Failed to save file at the path {}: {e}",
+                        new_path.display()
+                    )
+                })?;
 
                 successful = true;
             }
         }
     } else {
         file.write(path)
-            .map_err(|e| anyhow!("Failed to save file: {e}"))?;
+            .map_err(|e| anyhow!("Failed to save file at path {}: {e}", path.display()))?;
 
         println!("Saved file to {}", path.display());
     }
