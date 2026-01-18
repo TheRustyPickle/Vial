@@ -1,7 +1,10 @@
+use anyhow::{Context, Result, anyhow};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE};
 use chrono::{Days, Utc};
 use clap::{Parser, Subcommand};
-use std::fs::read;
+use dirs::config_dir;
+use serde::{Deserialize, Serialize};
+use std::fs::{File, create_dir_all, read};
 use std::io::{Write as _, stdin, stdout};
 use std::path::{Path, PathBuf};
 use vial_core::crypto::{
@@ -18,6 +21,39 @@ const MAX_SIZE: usize = 1024 * 1024 * 5 + 200;
 struct Cli {
     #[command(subcommand)]
     command: Command,
+}
+
+#[derive(Serialize, Deserialize)]
+struct Config {
+    download_path: Option<PathBuf>,
+    server_url: Option<String>,
+    max_size: Option<usize>,
+}
+
+impl Config {
+    fn get_config() -> Result<Self> {
+        let mut target_path = config_dir().unwrap();
+
+        target_path.push("Vial");
+        target_path.push("vial.json");
+
+        create_dir_all(&target_path).unwrap();
+
+        if target_path.exists() {
+            let contents = read(target_path)?;
+            Ok(serde_json::from_slice(&contents)?)
+        } else {
+            let config = Config {
+                download_path: None,
+                server_url: None,
+                max_size: None,
+            };
+
+            File::create(target_path)?.write_all(serde_json::to_string(&config)?.as_bytes())?;
+
+            Ok(config)
+        }
+    }
 }
 
 #[derive(Subcommand, Debug)]
@@ -99,13 +135,14 @@ enum Command {
 
 const PAYLOAD_URL: &str = "http://127.0.0.1:8080/secrets";
 
-fn main() {
+fn main() -> Result<()> {
     let cli = Cli::parse();
+    run(cli)?;
 
-    let _ = run(cli);
+    Ok(())
 }
 
-fn run(cli: Cli) -> Result<(), Box<dyn std::error::Error>> {
+fn run(cli: Cli) -> Result<()> {
     match cli.command {
         Command::Send {
             text,
@@ -129,10 +166,11 @@ fn send(
     expire: Option<i32>,
     password: bool,
     attachments: Vec<PathBuf>,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<()> {
     if view_count.is_none() && expire.is_none() {
-        println!("At least one of --view-count or --expire must be provided");
-        return Ok(());
+        return Err(anyhow!(
+            "At least one of --view-count or --expire must be provided"
+        ));
     }
 
     let mut expires_at = None;
@@ -140,16 +178,14 @@ fn send(
 
     if let Some(view_count) = view_count {
         if !(1..=1000).contains(&view_count) {
-            println!("--view-count must be between 1 and 1000");
-            return Ok(());
+            return Err(anyhow!("--view-count must be between 1 and 1000"));
         }
         max_views = Some(view_count);
     }
 
     if let Some(expire) = expire {
         if !(1..=30).contains(&expire) {
-            println!("--expire must be between 1 and 30");
-            return Ok(());
+            return Err(anyhow!("--expire must be between 1 and 30"));
         }
 
         expires_at = Some(Utc::now().naive_utc() + Days::new(expire as u64));
@@ -165,46 +201,37 @@ fn send(
         let content = read(&path)?;
         let filename = path.file_name().unwrap().to_string_lossy().to_string();
 
-        files.push(log_err(
-            SecretFileV1::new(&filename, content),
-            "Failed to serialize file",
-        )?);
+        files.push(
+            SecretFileV1::new(&filename, content)
+                .map_err(|e| anyhow!("Failed to serialize the attachment: {e}"))?,
+        );
     }
 
     let to_encrypt = FullSecretV1 { text, files }
         .to_payload()
-        .map_err(|e| {
-            println!("Failed to serialize secret: {e}");
-            e
-        })?
+        .context("Failed to serialize secret")?
         .to_bytes()
-        .map_err(|e| {
-            println!("Failed to serialize secret: {e}");
-            e
-        })?;
+        .context("Failed to serialize secret")?;
 
     let (blob, key) = if password {
-        let key = log_err(
-            rpassword::prompt_password("Enter password: "),
-            "Failed to read the password",
-        )?;
+        let key = rpassword::prompt_password("Enter password: ")
+            .context("Failed to read the password")?;
 
-        let blob = log_err(
-            encrypt_with_password(&to_encrypt, &key),
-            "Failed to encrypt",
-        )?;
+        let blob = encrypt_with_password(&to_encrypt, &key)
+            .context("Failed to encrypt with the given password")?;
 
         (blob, None)
     } else {
-        let (blob, key) = log_err(encrypt_with_random_key(&to_encrypt), "Failed to encrypt")?;
+        let (blob, key) =
+            encrypt_with_random_key(&to_encrypt).context("Failed to encrypt with a random key")?;
 
         (blob, Some(key))
     };
 
     if blob.len() > MAX_SIZE {
-        println!(
+        return Err(anyhow!(
             "The secret is too large to be sent. Try breaking it up. Max limit is {MAX_SIZE} bytes."
-        );
+        ));
     }
 
     let secret_request = CreateSecretRequest {
@@ -215,10 +242,8 @@ fn send(
 
     let client = reqwest::blocking::Client::new();
 
-    let secret_id: SecretId = log_err(
-        reqwest_json(client.post(PAYLOAD_URL).json(&secret_request)),
-        "Failed to create secret",
-    )?;
+    let secret_id: SecretId = reqwest_json(client.post(PAYLOAD_URL).json(&secret_request))
+        .context("Failed to create new secret")?;
 
     let secret_link = if password {
         format!("{PAYLOAD_URL}/{}", secret_id.0)
@@ -233,11 +258,7 @@ fn send(
     Ok(())
 }
 
-fn receive(
-    source: String,
-    password: bool,
-    random_key: bool,
-) -> Result<(), Box<dyn std::error::Error>> {
+fn receive(source: String, password: bool, random_key: bool) -> Result<()> {
     let Some(secret_id) = source.split('/').next_back() else {
         println!("Could not find the secret id in the secret link.");
         return Ok(());
@@ -247,35 +268,35 @@ fn receive(
 
     let client = reqwest::blocking::Client::new();
 
-    let payload: EncryptedPayload = log_err(
-        reqwest_json(client.get(format!("{PAYLOAD_URL}/{secret_id}"))),
-        "Failed to retrieve secret",
-    )?;
+    let payload: EncryptedPayload = reqwest_json(client.get(format!("{PAYLOAD_URL}/{secret_id}")))
+        .context("Failed to fetch the secret")?;
 
     let decrypted = if let Some((_, key)) = key {
-        decrypt_random_key(key, &payload.payload)?
+        decrypt_random_key(key, &payload.payload)
+            .context("Failed to decrypt using random key schema")?
     } else {
-        let key = log_err(
-            rpassword::prompt_password("Enter key/password: "),
-            "Failed to get the key",
-        )?;
+        let key = rpassword::prompt_password("Enter key/password: ")
+            .context("Failed to read the password")?;
 
         // If password flag is set, use password
         // If random key flag is set, use random key
         // Otherwise, use password
         if password {
-            decrypt_password(&key, &payload.payload)?
+            decrypt_password(&key, &payload.payload)
+                .context("Failed to decrypto using password schema")?
         } else if random_key {
-            decrypt_random_key(&key, &payload.payload)?
+            decrypt_random_key(&key, &payload.payload)
+                .context("Failed to decrypto using random key schema")?
         } else {
-            decrypt_password(&key, &payload.payload)?
+            decrypt_password(&key, &payload.payload)
+                .context("Failed to decrypto using password schema")?
         }
     };
 
     println!("{}", decrypted.text);
 
     for file in decrypted.files {
-        log_err(save_file(&file), "Failed to save file")?;
+        save_file(&file).context("Failed to save file")?;
     }
     Ok(())
 }
@@ -286,67 +307,39 @@ fn reqwest_json<T: serde::de::DeserializeOwned>(
     req.send()?.error_for_status()?.json()
 }
 
-fn log_err<T, E: std::fmt::Display>(res: Result<T, E>, context: &str) -> Result<T, E> {
-    res.map_err(|e| {
-        println!("{context}: {e}");
-        e
-    })
-}
+fn decrypt_random_key(key: &str, payload: &[u8]) -> Result<FullSecretV1> {
+    let decoded_key = URL_SAFE
+        .decode(key)
+        .context("Failed to decode key. Is the key valid?")?;
 
-fn decrypt_random_key(
-    key: &str,
-    payload: &[u8],
-) -> Result<FullSecretV1, Box<dyn std::error::Error>> {
-    let decoded_key = log_err(
-        URL_SAFE.decode(key),
-        "Failed to decode key. Is the key valid",
-    )?;
+    let arr_ref: &[u8; 32] = decoded_key
+        .as_slice()
+        .try_into()
+        .context("Failed to decode key. Is the key valid")?;
 
-    let arr_ref: &[u8; 32] = log_err(
-        decoded_key.as_slice().try_into(),
-        "Failed to decode key. Is the key valid",
-    )?;
-
-    let decrypted = log_err(
-        decrypt_with_random_key(payload, arr_ref),
-        "Failed to decrypt secret",
-    )?;
+    let decrypted =
+        decrypt_with_random_key(payload, arr_ref).context("Failed to decrypt secret")?;
 
     let full_secret = Payload::from_bytes(decrypted)
-        .map_err(|e| {
-            println!("Failed to deserialize secret: {e}");
-            e
-        })?
+        .context("Failed to deserialize secret")?
         .to_full_secret()
-        .map_err(|e| {
-            println!("Failed to deserialize secret: {e}");
-            e
-        })?;
+        .context("Failed to deserialize secret")?;
 
     Ok(full_secret)
 }
 
-fn decrypt_password(key: &str, payload: &[u8]) -> Result<FullSecretV1, Box<dyn std::error::Error>> {
-    let decrypted = log_err(
-        decrypt_with_password(payload, key),
-        "Failed to decrypt secret",
-    )?;
+fn decrypt_password(key: &str, payload: &[u8]) -> Result<FullSecretV1> {
+    let decrypted = decrypt_with_password(payload, key).context("Failed to decrypt secret")?;
 
     let full_secret = Payload::from_bytes(decrypted)
-        .map_err(|e| {
-            println!("Failed to deserialize secret: {e}");
-            e
-        })?
+        .context("Failed to serialize secret")?
         .to_full_secret()
-        .map_err(|e| {
-            println!("Failed to deserialize secret: {e}");
-            e
-        })?;
+        .context("Failed to serialize secret")?;
 
     Ok(full_secret)
 }
 
-fn save_file(file: &SecretFileV1) -> Result<(), Box<dyn std::error::Error>> {
+fn save_file(file: &SecretFileV1) -> Result<()> {
     let path = Path::new(file.filename());
 
     // If path exists, try to save the file by adding (x) number, at most 10 times.
@@ -360,7 +353,8 @@ fn save_file(file: &SecretFileV1) -> Result<(), Box<dyn std::error::Error>> {
             let new_path = Path::new(&new_file_name);
 
             if !new_path.exists() {
-                file.write(new_path)?;
+                file.write(new_path)
+                    .map_err(|e| anyhow!("Failed to save file: {e}"))?;
 
                 println!("Saved file to {}", new_path.display());
                 successful = true;
@@ -375,20 +369,23 @@ fn save_file(file: &SecretFileV1) -> Result<(), Box<dyn std::error::Error>> {
             stdin().read_line(&mut filename)?;
 
             let filename = filename.trim();
-            let safe_filename = sanitize_filename(filename)?;
+            let safe_filename = sanitize_filename(filename)
+                .map_err(|e| anyhow!("Failed to sanitize filename: {e}"))?;
 
             let new_path = Path::new(&safe_filename);
 
             if new_path.exists() {
                 println!("File already exists.");
             } else {
-                file.write(new_path)?;
+                file.write(new_path)
+                    .map_err(|e| anyhow!("Failed to save file: {e}"))?;
 
                 successful = true;
             }
         }
     } else {
-        file.write(path)?;
+        file.write(path)
+            .map_err(|e| anyhow!("Failed to save file: {e}"))?;
 
         println!("Saved file to {}", path.display());
     }

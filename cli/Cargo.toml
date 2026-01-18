@@ -12,7 +12,10 @@ vial-core.workspace = true
 vial-shared.workspace = true
 chrono.workspace = true
 serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true
 
+dirs = "6.0.0"
 reqwest = { version = "0.13.1", features = ["json", "blocking"] }
 clap = { version = "4.5.54", features = ["derive"] }
 base64 = "0.22.1"
