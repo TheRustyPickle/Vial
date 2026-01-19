@@ -1,19 +1,21 @@
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
+
+#[cfg(not(target_arch = "wasm32"))]
 use std::path::Path;
 
 /// Received via HTTPS from the server then decrypted to Payload struct
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct EncryptedPayload {
     pub payload: Vec<u8>,
 }
 
 /// Gets returned by the server when creating a new secret
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct SecretId(pub String);
 
 /// Sent to the server when creating a new secret
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct CreateSecretRequest {
     pub ciphertext: Vec<u8>,
     pub expires_at: Option<NaiveDateTime>,
@@ -25,7 +27,7 @@ pub struct CreateSecretRequest {
 ///
 /// After deserializing, the bytes can be deserialized to `FullSecretV1` struct.
 /// Similarly, payload is generated from the serialized `FullSecretV1` struct.
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct Payload {
     pub version: u8,
     pub payload: Vec<u8>,
@@ -47,25 +49,27 @@ impl Payload {
         postcard::from_bytes(&bytes)
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn to_full_secret(&self) -> Result<FullSecretV1, postcard::Error> {
         let secret = FullSecretV1::from_bytes(&self.payload)?;
         Ok(secret)
     }
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct FullSecretV1 {
     pub text: String,
     pub files: Vec<SecretFileV1>,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct SecretFileV1 {
     filename: String,
     content: Vec<u8>,
 }
 
 impl SecretFileV1 {
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn new(filename: &str, content: Vec<u8>) -> Result<Self, Box<dyn std::error::Error>> {
         let safe_filename = sanitize_filename(filename)?;
 
@@ -89,6 +93,7 @@ impl SecretFileV1 {
         &self.content
     }
 
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn write(&self, path: &Path) -> Result<(), Box<dyn std::error::Error>> {
         std::fs::write(path, self.content())?;
         Ok(())
@@ -113,6 +118,7 @@ impl FullSecretV1 {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub fn sanitize_filename(name: &str) -> Result<String, &'static str> {
     let path = Path::new(name);
 

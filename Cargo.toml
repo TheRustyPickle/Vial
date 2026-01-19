@@ -1,12 +1,12 @@
 [workspace]
-members = ["cli", "server", "srv-lib", "core", "vial-shared"]
+members = ["cli", "server", "srv-lib", "core", "shared"]
 
 resolver = "2"
 
 [workspace.dependencies]
 vial-core = { path = "core" }
 vial-srv = { path = "srv-lib" }
-vial-shared = { path = "vial-shared" }
+vial-shared = { path = "shared" }
 chrono = { version = "0.4.42", features = ["serde"] }
 tokio = { version = "1.49.0", features = ["rt-multi-thread", "macros"] }
 serde = { version = "1.0.228", features = ["derive"] }
