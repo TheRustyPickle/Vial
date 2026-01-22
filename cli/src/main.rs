@@ -17,7 +17,8 @@ use vial_shared::{
 };
 
 const MAX_SIZE: usize = 1024 * 1024 * 5 + 200;
-const DEFAULT_URL: &str = "http://127.0.0.1:8080/secrets";
+const DEFAULT_SERVER_URL: &str = "https://rustypickle.onrender.com/api/secrets";
+const DEFAULT_WEB_URL: &str = "https://rustypickle.onrender.com/secrets";
 
 #[derive(Parser, Debug)]
 struct Cli {
@@ -30,6 +31,7 @@ struct Config {
     download_path: Option<PathBuf>,
     server_url: Option<String>,
     max_size: Option<usize>,
+    web_ui_url: Option<String>,
 }
 
 impl Config {
@@ -50,6 +52,7 @@ impl Config {
                 download_path: None,
                 server_url: None,
                 max_size: None,
+                web_ui_url: None,
             };
 
             config.save_config()?;
@@ -68,6 +71,14 @@ impl Config {
 
     fn set_server_url(&mut self, url: String) -> Result<()> {
         self.server_url = Some(url);
+
+        self.save_config()?;
+
+        Ok(())
+    }
+
+    fn set_web_ui_url(&mut self, url: String) -> Result<()> {
+        self.web_ui_url = Some(url);
 
         self.save_config()?;
 
@@ -204,11 +215,26 @@ pub struct ConfigArgs {
     /// Example:
     ///   http://127.0.0.1:8080/secrets
     ///
-    /// Defaults to http://127.0.0.1:8080/secrets
+    /// Defaults to https://rustypickle.onrender.com/api/secrets
     #[arg(long, value_name = "URL")]
     pub set_server_url: Option<String>,
 
-    /// Set the maximum allowed secret size (in bytes)
+    /// Set the secrets web UI base URL
+    ///
+    /// This must be an endpoint that accepts:
+    ///
+    /// /{id} parameter
+    ///
+    /// Example:
+    ///   http://127.0.0.1:8080/secrets
+    ///
+    /// Defaults to https://rustypickle.onrender.com/secrets
+    #[arg(long, value_name = "URL")]
+    pub set_web_url: Option<String>,
+
+    /// Set the maximum allowed secret size (in bytes).
+    ///
+    /// Unless a different server is used than the default one, this value is ignored.
     ///
     /// Defaults to 5 MB plus a small overhead for encryption metadata.
     ///
@@ -318,7 +344,7 @@ fn send(
     // Only accept the size in the config if a different server is used than the default one
     let max_size = if let Some(max_size) = config.max_size
         && let Some(url) = &config.server_url
-        && url != DEFAULT_URL
+        && url != DEFAULT_SERVER_URL
     {
         max_size
     } else {
@@ -328,7 +354,13 @@ fn send(
     let post_url = if let Some(url) = config.server_url {
         url
     } else {
-        DEFAULT_URL.to_string()
+        DEFAULT_SERVER_URL.to_string()
+    };
+
+    let web_ui_url = if let Some(url) = config.web_ui_url {
+        url
+    } else {
+        DEFAULT_WEB_URL.to_string()
     };
 
     if blob.len() > max_size {
@@ -355,11 +387,11 @@ fn send(
         .context("Failed to create new secret")?;
 
     let secret_link = if password {
-        format!("{post_url}/{}", secret_id.0)
+        format!("{web_ui_url}/{}", secret_id.0)
     } else {
         let key_b64 = URL_SAFE.encode(key.unwrap());
 
-        format!("{post_url}/{}#{key_b64}", secret_id.0)
+        format!("{web_ui_url}/{}#{key_b64}", secret_id.0)
     };
 
     println!("{secret_link}");
@@ -379,7 +411,7 @@ fn receive(source: String, password: bool, random_key: bool) -> Result<()> {
     let post_url = if let Some(url) = config.server_url {
         url
     } else {
-        DEFAULT_URL.to_string()
+        DEFAULT_SERVER_URL.to_string()
     };
 
     let key = source.split_once('#');
@@ -438,6 +470,12 @@ fn config(args: ConfigArgs) -> Result<()> {
         config
             .set_max_size(size)
             .with_context(|| format!("Failed to set new max size {}", size))?;
+    }
+
+    if let Some(url) = args.set_web_url {
+        config
+            .set_web_ui_url(url.clone())
+            .with_context(|| format!("Failed to set new server url {}", url))?;
     }
 
     if args.show {
