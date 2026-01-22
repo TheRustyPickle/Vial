@@ -1,20 +1,16 @@
-use diesel::ConnectionError;
-use diesel::ConnectionResult;
+use diesel::{ConnectionError, ConnectionResult};
 use diesel_async::AsyncPgConnection;
-use diesel_async::pooled_connection::AsyncDieselConnectionManager;
-use diesel_async::pooled_connection::ManagerConfig;
 use diesel_async::pooled_connection::bb8::Pool;
+use diesel_async::pooled_connection::{AsyncDieselConnectionManager, ManagerConfig};
 use futures_util::FutureExt;
 use futures_util::future::BoxFuture;
-use rustls::ClientConfig;
-use rustls::RootCertStore;
 use rustls::pki_types::CertificateDer;
 use rustls::pki_types::pem::PemObject;
+use rustls::{ClientConfig, RootCertStore};
 use std::env::var;
 use std::fs::read;
 use tokio::time::Duration;
-use vial_shared::CreateSecretRequest;
-use vial_shared::EncryptedPayload;
+use vial_shared::{CreateSecretRequest, EncryptedPayload};
 
 use crate::db::models::Secret;
 use crate::errors::ServerError;
@@ -40,7 +36,7 @@ pub async fn get_connection(url: &str) -> Handler {
         .idle_timeout(Some(Duration::from_secs(60 * 2)))
         .build(mgr)
         .await
-        .unwrap();
+        .unwrap_or_else(|e| panic!("Failed to create DB connection. Error: {e}"));
 
     let handler = Handler { conn };
 
@@ -59,8 +55,11 @@ fn establish_connection(config: &str) -> BoxFuture<'_, ConnectionResult<AsyncPgC
 
         // Specifically for working with self signed certs.
         if let Ok(cert_location) = var("CERT_LOCATION") {
-            let file_bytes = read(cert_location).unwrap();
-            let cert = CertificateDer::from_pem_slice(&file_bytes).unwrap();
+            let file_bytes = read(&cert_location)
+                .unwrap_or_else(|e| panic!("Failed to read {}. Error: {e}", cert_location));
+            let cert = CertificateDer::from_pem_slice(&file_bytes)
+                .unwrap_or_else(|e| panic!("Failed to create cert. Error: {e}"));
+
             root_store.add(cert).unwrap();
         }
 
@@ -132,7 +131,9 @@ impl Handler {
     async fn initiate_expired_cleanup(&self) {
         loop {
             tokio::time::sleep(Duration::from_secs(60)).await;
-            self.clear_expired().await.unwrap();
+            if let Err(e) = self.clear_expired().await {
+                println!("Failed to clear expired secrets. Error: {e}");
+            };
         }
     }
 }
