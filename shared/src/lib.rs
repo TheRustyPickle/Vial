@@ -49,7 +49,6 @@ impl Payload {
         postcard::from_bytes(&bytes)
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
     pub fn to_full_secret(&self) -> Result<FullSecretV1, postcard::Error> {
         let secret = FullSecretV1::from_bytes(&self.payload)?;
         Ok(secret)
