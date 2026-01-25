@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::Path;
+use std::sync::Arc;
 
 /// Received via HTTPS from the server then decrypted to Payload struct
 #[derive(Deserialize, Serialize, Clone, Debug)]
@@ -93,7 +94,7 @@ impl SecretFileV1 {
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    pub fn write(&self, path: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn write(&self, path: &Path) -> Result<(), std::io::Error> {
         std::fs::write(path, self.content())?;
         Ok(())
     }
@@ -114,6 +115,58 @@ impl FullSecretV1 {
             version: 1,
             payload,
         })
+    }
+
+    pub fn total_files(&self) -> usize {
+        self.files.len()
+    }
+
+    pub fn into_shared(self) -> FullSecret {
+        FullSecret {
+            text: self.text,
+            files: self
+                .files
+                .into_iter()
+                .map(|f| SecretFile {
+                    filename: f.filename,
+                    content: Arc::new(f.content),
+                })
+                .collect(),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct FullSecret {
+    pub text: String,
+    pub files: Vec<SecretFile>,
+}
+
+#[derive(Clone, Debug)]
+pub struct SecretFile {
+    pub filename: String,
+    pub content: Arc<Vec<u8>>,
+}
+
+impl FullSecret {
+    pub fn total_files(&self) -> usize {
+        self.files.len()
+    }
+}
+
+impl SecretFile {
+    pub fn filename(&self) -> &str {
+        &self.filename
+    }
+
+    pub fn content(&self) -> &[u8] {
+        &self.content
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn write(&self, path: &Path) -> Result<(), std::io::Error> {
+        std::fs::write(path, self.content())?;
+        Ok(())
     }
 }
 

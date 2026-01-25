@@ -12,8 +12,8 @@ use vial_core::crypto::{
     decrypt_with_password, decrypt_with_random_key, encrypt_with_password, encrypt_with_random_key,
 };
 use vial_shared::{
-    CreateSecretRequest, EncryptedPayload, FullSecretV1, Payload, SecretFileV1, SecretId,
-    sanitize_filename,
+    CreateSecretRequest, EncryptedPayload, FullSecretV1, Payload, SecretFile, SecretFileV1,
+    SecretId, sanitize_filename,
 };
 
 const MAX_SIZE: usize = 1024 * 1024 * 5 + 200;
@@ -441,7 +441,8 @@ fn receive(source: String, password: bool, random_key: bool) -> Result<()> {
             decrypt_password(&key, &payload.payload)
                 .context("Failed to decrypt using password schema")?
         }
-    };
+    }
+    .into_shared();
 
     println!("{}", decrypted.text);
 
@@ -526,7 +527,7 @@ fn decrypt_password(key: &str, payload: &[u8]) -> Result<FullSecretV1> {
     Ok(full_secret)
 }
 
-fn save_file(file: &SecretFileV1, download_path: &Option<PathBuf>) -> Result<()> {
+fn save_file(file: &SecretFile, download_path: &Option<PathBuf>) -> Result<()> {
     if let Some(path) = download_path {
         set_current_dir(path)
             .with_context(|| format!("Failed to change directory to {}", path.display()))?;
