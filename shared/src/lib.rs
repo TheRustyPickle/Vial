@@ -123,7 +123,7 @@ impl FullSecretV1 {
 
     pub fn into_shared(self) -> FullSecret {
         FullSecret {
-            text: self.text,
+            text: Arc::new(self.text),
             files: self
                 .files
                 .into_iter()
@@ -138,7 +138,7 @@ impl FullSecretV1 {
 
 #[derive(Clone, Debug)]
 pub struct FullSecret {
-    pub text: String,
+    pub text: Arc<String>,
     pub files: Vec<SecretFile>,
 }
 
