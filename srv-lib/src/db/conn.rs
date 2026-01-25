@@ -56,7 +56,7 @@ fn establish_connection(config: &str) -> BoxFuture<'_, ConnectionResult<AsyncPgC
         // Specifically for working with self signed certs.
         if let Ok(cert_location) = var("CERT_LOCATION") {
             let file_bytes = read(&cert_location)
-                .unwrap_or_else(|e| panic!("Failed to read {}. Error: {e}", cert_location));
+                .unwrap_or_else(|e| panic!("Failed to read {cert_location}. Error: {e}"));
             let cert = CertificateDer::from_pem_slice(&file_bytes)
                 .unwrap_or_else(|e| panic!("Failed to create cert. Error: {e}"));
 
@@ -133,7 +133,7 @@ impl Handler {
             tokio::time::sleep(Duration::from_secs(60)).await;
             if let Err(e) = self.clear_expired().await {
                 println!("Failed to clear expired secrets. Error: {e}");
-            };
+            }
         }
     }
 }

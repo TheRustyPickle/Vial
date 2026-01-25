@@ -464,19 +464,19 @@ fn config(args: ConfigArgs) -> Result<()> {
     if let Some(url) = args.set_server_url {
         config
             .set_server_url(url.clone())
-            .with_context(|| format!("Failed to set new server url {}", url))?;
+            .with_context(|| format!("Failed to set new server url {url}"))?;
     }
 
     if let Some(size) = args.set_max_size {
         config
             .set_max_size(size)
-            .with_context(|| format!("Failed to set new max size {}", size))?;
+            .with_context(|| format!("Failed to set new max size {size}"))?;
     }
 
     if let Some(url) = args.set_web_url {
         config
             .set_web_ui_url(url.clone())
-            .with_context(|| format!("Failed to set new server url {}", url))?;
+            .with_context(|| format!("Failed to set new server url {url}"))?;
     }
 
     if args.show {

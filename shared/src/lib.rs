@@ -117,10 +117,12 @@ impl FullSecretV1 {
         })
     }
 
+    #[must_use]
     pub fn total_files(&self) -> usize {
         self.files.len()
     }
 
+    #[must_use]
     pub fn into_shared(self) -> FullSecret {
         FullSecret {
             text: Arc::new(self.text),
@@ -149,16 +151,19 @@ pub struct SecretFile {
 }
 
 impl FullSecret {
+    #[must_use]
     pub fn total_files(&self) -> usize {
         self.files.len()
     }
 }
 
 impl SecretFile {
+    #[must_use]
     pub fn filename(&self) -> &str {
         &self.filename
     }
 
+    #[must_use]
     pub fn content(&self) -> &[u8] {
         &self.content
     }
