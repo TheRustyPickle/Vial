@@ -23,7 +23,7 @@ The primary tool is a CLI. A web UI is provided as an optional way to view secre
 | Crate      | Description                                                               |
 |------------|------------                                                               |
 | [vial-cli](cli)        | CLI binary (secret creation & consumption)                    |
-| [vial-core](cli)       | Cryptography primitives (encryption / decryption)             |
+| [vial-core](core)       | Cryptography primitives (encryption / decryption)             |
 | [vial-shared](shared)  | Shared request / response types                               |
 | [vial-srv](srv-lib)    | Framework-agnostic server logic/library (DB, rules, limits)   |
 | [vial-server](server)  | Actix-web server binary using srv-lib                         |
