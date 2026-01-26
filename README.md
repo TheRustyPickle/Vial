@@ -22,11 +22,11 @@ The primary tool is a CLI. A web UI is provided as an optional way to view secre
 
 | Crate      | Description                                                               |
 |------------|------------                                                               |
-| [vial-cli](cli)        | CLI binary (secret creation & consumption)                    |
-| [vial-core](core)       | Cryptography primitives (encryption / decryption)             |
-| [vial-shared](shared)  | Shared request / response types                               |
-| [vial-srv](srv-lib)    | Framework-agnostic server logic/library (DB, rules, limits)   |
-| [vial-server](server)  | Actix-web server binary using srv-lib                         |
+| [vial-cli](https://crates.io/crates/vial-cli)        | CLI binary (secret creation & consumption)                    |
+| [vial-core](https://crates.io/crates/vial-core)       | Cryptography primitives (encryption / decryption)             |
+| [vial-shared](https://crates.io/crates/vial-shared)  | Shared request / response types                               |
+| [vial-srv](https://crates.io/crates/vial-srv)    | Framework-agnostic server logic/library (DB, rules, limits)   |
+| [vial-server](https://crates.io/crates/vial-server)  | Actix-web server binary using srv-lib                         |
 
 ## Installation
 
