@@ -9,7 +9,7 @@ chrono.workspace = true
 tokio.workspace = true
 
 diesel = { version = "2.3.5", features = ["chrono"] }
-diesel-async = { version = "0.7.4", features = ["bb8", "postgres"] }
+diesel-async = { version = "0.7.4", features = ["bb8", "postgres", "migrations"] }
 diesel_migrations = "2.3.1"
 rustls = { version = "0.23.36", features = ["ring"] }
 tokio-postgres = "0.7.15"

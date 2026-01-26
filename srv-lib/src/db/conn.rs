@@ -1,7 +1,8 @@
 use diesel::{ConnectionError, ConnectionResult};
-use diesel_async::AsyncPgConnection;
 use diesel_async::pooled_connection::bb8::Pool;
 use diesel_async::pooled_connection::{AsyncDieselConnectionManager, ManagerConfig};
+use diesel_async::{AsyncMigrationHarness, AsyncPgConnection};
+use diesel_migrations::{EmbeddedMigrations, MigrationHarness as _, embed_migrations};
 use futures_util::FutureExt;
 use futures_util::future::BoxFuture;
 use rustls::pki_types::CertificateDer;
@@ -20,6 +21,8 @@ pub struct Handler {
     conn: Pool<AsyncPgConnection>,
 }
 
+pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("src/migrations");
+
 pub async fn get_connection(url: &str) -> Handler {
     rustls::crypto::ring::default_provider()
         .install_default()
@@ -37,6 +40,17 @@ pub async fn get_connection(url: &str) -> Handler {
         .build(mgr)
         .await
         .unwrap_or_else(|e| panic!("Failed to create DB connection. Error: {e}"));
+
+    {
+        let async_connection = establish_connection(url)
+            .await
+            .expect("Failed to establish_connection to DB");
+        let mut harness = AsyncMigrationHarness::new(async_connection);
+        harness
+            .run_pending_migrations(MIGRATIONS)
+            .expect("Failed to run migrations");
+        let _async_connection = harness.into_inner();
+    }
 
     let handler = Handler { conn };
 

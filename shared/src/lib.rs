@@ -1,9 +1,9 @@
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
 #[cfg(not(target_arch = "wasm32"))]
 use std::path::Path;
-use std::sync::Arc;
 
 /// Received via HTTPS from the server then decrypted to Payload struct
 #[derive(Deserialize, Serialize, Clone, Debug)]
@@ -175,6 +175,7 @@ impl SecretFile {
     }
 }
 
+/// Helper function to sanitize a filename from potentially unsafe characters
 #[cfg(not(target_arch = "wasm32"))]
 pub fn sanitize_filename(name: &str) -> Result<String, &'static str> {
     let path = Path::new(name);

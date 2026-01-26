@@ -8,7 +8,7 @@ use vial_srv::errors::ServerError;
 
 const MAX_SIZE: usize = 1024 * 1024 * 5 + 200;
 
-#[actix_web::main]
+#[tokio::main]
 async fn main() {
     dotenvy::dotenv().ok();
 
