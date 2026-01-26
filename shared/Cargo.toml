@@ -2,6 +2,16 @@
 name = "vial-shared"
 version = "0.1.0"
 edition = "2024"
+authors = ["TheRustyPickle <rusty.pickle94@gmail.com>"]
+readme = "../README.md"
+description = """
+Shared request / response types for Vial
+"""
+homepage = "https://github.com/TheRustyPickle/Vial"
+repository = "https://github.com/TheRustyPickle/Vial"
+license = "MIT"
+keywords = ["cli", "e2e", "secret", "vault", "secure"]
+categories = ["command-line-utilities"]
 
 [dependencies]
 chrono.workspace = true
