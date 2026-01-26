@@ -18,7 +18,14 @@ async fn main() {
         .init();
 
     let db_url = var("DATABASE_URL").expect("DATABASE_URL must be set");
+    let max_secret_day = var("MAX_SECRET_DAY")
+        .ok()
+        .and_then(|p| p.parse::<i32>().ok())
+        .unwrap_or(30);
+
     let db_handler = get_connection(&db_url).await;
+
+    db_handler.initiate_days_cleanup(max_secret_day).await;
 
     let port = var("PORT")
         .ok()
@@ -29,7 +36,7 @@ async fn main() {
 
     HttpServer::new(move || {
         App::new().app_data(Data::new(db_handler.clone())).service(
-            web::scope("/secrets")
+            web::scope("/api/secrets")
                 .route("/{id}", web::get().to(get_secret))
                 .route("", web::post().to(create_secret)),
         )
