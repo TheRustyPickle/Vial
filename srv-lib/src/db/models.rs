@@ -127,4 +127,17 @@ impl Secret {
             .execute(conn)
             .await
     }
+
+    pub async fn clear_expired_days(
+        days: i32,
+        conn: &mut AsyncPgConnection,
+    ) -> Result<usize, Error> {
+        use crate::schema::secrets::dsl::{created_at, secrets};
+
+        let cutoff = Utc::now() - Duration::days(days.into());
+
+        diesel::delete(secrets.filter(created_at.lt(cutoff)))
+            .execute(conn)
+            .await
+    }
 }

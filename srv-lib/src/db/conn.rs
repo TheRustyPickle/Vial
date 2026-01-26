@@ -119,6 +119,20 @@ impl Handler {
         Ok(())
     }
 
+    pub async fn clear_expired_days(&self, days: i32) -> Result<(), ServerError> {
+        let mut conn = self
+            .conn
+            .get()
+            .await
+            .map_err(|e| ServerError::DatabaseError(e.to_string()))?;
+
+        Secret::clear_expired_days(days, &mut conn)
+            .await
+            .map_err(|e| ServerError::DatabaseError(e.to_string()))?;
+
+        Ok(())
+    }
+
     pub async fn new_secret(&self, new_secret: CreateSecretRequest) -> Result<String, ServerError> {
         let mut conn = self
             .conn
@@ -140,6 +154,19 @@ impl Handler {
             .map_err(|e| ServerError::DatabaseError(e.to_string()))?;
 
         Ok(secret_id)
+    }
+
+    pub async fn initiate_days_cleanup(&self, days: i32) {
+        let self_clone = self.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_secs(60)).await;
+
+                if let Err(e) = self_clone.clear_expired_days(days).await {
+                    println!("Failed to clear expired secrets. Error: {e}");
+                }
+            }
+        });
     }
 
     async fn initiate_expired_cleanup(&self) {
