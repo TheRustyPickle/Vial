@@ -44,7 +44,7 @@ The primary tool is a CLI. A web UI is provided as an optional way to view secre
 **3. Install using Cargo:**
 
 - To install the CLI `cargo install vial-cli` and run `vial --help`
-- To install the server `cargo install vial-server` and run `vial-server`
+- To install the server `cargo install vial-server`. [See here](server/README.md) to find the env variable list for the server
 
 ## Web UI
 
