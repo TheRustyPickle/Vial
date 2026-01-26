@@ -3046,13 +3046,28 @@ dependencies = [
  "rpassword",
  "serde",
  "serde_json",
- "vial-core",
- "vial-shared",
+ "vial-core 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "vial-shared 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "vial-core"
 version = "0.1.0"
+dependencies = [
+ "aead",
+ "anyhow",
+ "argon2",
+ "chacha20poly1305",
+ "getrandom 0.2.17",
+ "getrandom 0.3.4",
+ "rand",
+]
+
+[[package]]
+name = "vial-core"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5fcc9f98a5d33006a709579ad94ab1c86f327e446979939063a6c94157801177"
 dependencies = [
  "aead",
  "anyhow",
@@ -3072,13 +3087,25 @@ dependencies = [
  "log",
  "pretty_env_logger",
  "tokio",
- "vial-shared",
- "vial-srv",
+ "vial-shared 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "vial-srv 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]
 name = "vial-shared"
 version = "0.1.0"
+dependencies = [
+ "chrono",
+ "postcard",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
+name = "vial-shared"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "603556107260a4cb1d201314d9e09c4bfdc1b8a17745cf6b346f9ff40086e1be"
 dependencies = [
  "chrono",
  "postcard",
@@ -3101,7 +3128,27 @@ dependencies = [
  "tokio-postgres",
  "tokio-postgres-rustls",
  "ulid",
- "vial-shared",
+ "vial-shared 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "vial-srv"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "763cb94bee6c0a66b3b18b4eafbfe50b8470cd5594c2254c795994e517b13a96"
+dependencies = [
+ "chrono",
+ "diesel",
+ "diesel-async",
+ "diesel_migrations",
+ "futures-util",
+ "rustls",
+ "thiserror 2.0.17",
+ "tokio",
+ "tokio-postgres",
+ "tokio-postgres-rustls",
+ "ulid",
+ "vial-shared 0.1.0 (registry+https://github.com/rust-lang/crates.io-index)",
 ]
 
 [[package]]

@@ -4,9 +4,9 @@ members = ["cli", "server", "srv-lib", "core", "shared"]
 resolver = "2"
 
 [workspace.dependencies]
-vial-core = { path = "core" }
-vial-srv = { path = "srv-lib" }
-vial-shared = { path = "shared" }
+vial-core = "0.1.0"
+vial-srv = "0.1.0"
+vial-shared = "0.1.0"
 chrono = { version = "0.4.42", features = ["serde"] }
 tokio = { version = "1.49.0", features = ["rt-multi-thread", "macros"] }
 serde = { version = "1.0.228", features = ["derive"] }
