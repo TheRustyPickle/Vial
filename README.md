@@ -20,13 +20,13 @@ The primary tool is a CLI. A web UI is provided as an optional way to view secre
 
 ## Workspace Members
 
-| Crate      | Description                                          |
-|------------|------------                                          |
-| cli        | CLI binary (secret creation & consumption)           |
-| core       | Cryptography primitives (encryption / decryption)    |
-| shared     | Shared request / response types                      |
-| srv-lib    | Framework-agnostic server logic (DB, rules, limits)  |
-| server     | Actix-web server binary using srv-lib                |
+| Crate      | Description                                                    |
+|------------|------------                                                    |
+| [cli](cli)        | CLI binary (secret creation & consumption)              |
+| [core](cli)       | Cryptography primitives (encryption / decryption)       |
+| [shared](shared)     | Shared request / response types                      |
+| [srv-lib](srv-lib)    | Framework-agnostic server logic (DB, rules, limits) |
+| [server](server)     | Actix-web server binary using srv-lib                |
 
 ## Installation
 

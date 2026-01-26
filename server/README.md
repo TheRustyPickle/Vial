@@ -7,7 +7,7 @@ It uses `srv-lib` internally and can be self-hosted.
 
 | Variable        | Description                                                                     |
 |-----------------|------------                                                                     |
-| `DATABASE_URL`  | Connection URL to the Postgres database. Required.                 |
+| `DATABASE_URL`  | Connection URL to the Postgres database. Required.                              |
 | `MAX_SECRET_DAY`| Number of days after which a secret will be automatically deleted. Default: 30  |
 | `PORT`          | TCP port for the server to bind to. Default: 8080                               |
 | `ADDRESS`       | IP address / host to bind to. Default: 127.0.0.1                                |
