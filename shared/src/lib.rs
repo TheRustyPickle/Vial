@@ -188,7 +188,7 @@ pub fn sanitize_filename(name: &str) -> Result<String, &'static str> {
 
     let file_name = file_name.to_str().ok_or("Filename is not valid UTF-8")?;
 
-    if file_name.is_empty() || file_name == "." || file_name == ".." || !path.is_file() {
+    if file_name.is_empty() || file_name == "." || file_name == ".." {
         return Err("Invalid filename");
     }
 
