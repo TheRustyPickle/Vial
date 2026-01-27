@@ -50,6 +50,8 @@ The primary tool is a CLI. A web UI is provided as an optional way to view secre
 
 [A web UI is available](https://rustypickle.onrender.com/) with [source code](https://github.com/TheRustyPickle/My-Site/blob/main/app/src/secrets.rs) and is used as the default URL in the CLI. The site uses the same `srv-lib` and can only perform decryption on the client.
 
+[A demo secret](https://rustypickle.onrender.com/secrets/01KFZPC330S6S45221BF7XV8JR) can be viewed here with the password `password`
+
 ## Project Status & Disclaimer
 
 This project:
