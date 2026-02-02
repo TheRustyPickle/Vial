@@ -1,5 +1,5 @@
 [workspace]
-members = ["cli", "server", "srv-lib", "core", "shared"]
+members = ["cli", "server", "srv-lib", "core", "shared", "gui"]
 
 resolver = "2"
 

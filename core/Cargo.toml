@@ -9,7 +9,7 @@ Crypto primitives for encrypting / decrypting for Vial
 homepage = "https://github.com/TheRustyPickle/Vial"
 repository = "https://github.com/TheRustyPickle/Vial"
 license = "MIT"
-keywords = ["cli", "e2e", "secret", "vault", "secure"]
+keywords = ["cli", "e2ee", "secret", "vault", "secure"]
 categories = ["command-line-utilities"]
 
 
