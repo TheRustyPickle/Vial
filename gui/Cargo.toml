@@ -1,0 +1,23 @@
+[package]
+name = "vial-gui"
+version = "0.1.0"
+edition = "2024"
+authors = ["TheRustyPickle <rusty.pickle94@gmail.com>"]
+readme = "../README.md"
+description = """
+GUI for creating and retrieving end-to-end encrypted secrets
+"""
+homepage = "https://github.com/TheRustyPickle/Vial"
+repository = "https://github.com/TheRustyPickle/Vial"
+license = "MIT"
+keywords = ["cli", "e2ee", "secret", "vault", "secure"]
+categories = ["GUI"]
+
+
+[dependencies]
+anyhow.workspace = true
+
+gpui = "0.2.2"
+gpui-component = "0.5.0"
+gpui-component-assets = "0.5.0"
+
