@@ -3,6 +3,7 @@ mod send;
 use gpui::*;
 use gpui_component::tab::{Tab, TabBar};
 use gpui_component::{Root, Theme, ThemeMode, h_flex, v_flex};
+use gpui_component_assets::Assets;
 
 use crate::send::SendView;
 
@@ -19,7 +20,8 @@ impl MainTab {
         match index {
             0 => Self::Send,
             1 => Self::Receive,
-            _ => Self::Config,
+            2 => Self::Config,
+            _ => panic!("This should never happen"),
         }
     }
 }
@@ -44,7 +46,7 @@ impl MainWindow {
         cx.notify();
     }
 
-    fn render_tab(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_tab(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         match self.active_tab {
             MainTab::Send => div().child(self.send_view.clone()),
             _ => div().child(self.send_view.clone()),
@@ -59,36 +61,41 @@ impl Render for MainWindow {
         v_flex()
             .size_full()
             .items_center()
-            .p_2()
             .gap_2()
             .child(
-                h_flex().items_center().justify_center().w_3_5().child(
-                    TabBar::new("tabs")
-                        .w_full()
-                        .segmented()
-                        .selected_index(active_tab_index)
-                        .on_click(cx.listener(|this, ix: &usize, window, cx| {
-                            this.set_active_tab(*ix, window, cx);
-                        }))
-                        .items_center()
-                        .justify_center()
-                        .child(Tab::new().label("Send").flex_1())
-                        .child(Tab::new().label("Receive").flex_1())
-                        .child(Tab::new().label("Config").flex_1()),
-                ),
+                h_flex()
+                    .pt_2()
+                    .items_center()
+                    .justify_center()
+                    .w_3_5()
+                    .child(
+                        TabBar::new("tabs")
+                            .w_full()
+                            .segmented()
+                            .selected_index(active_tab_index)
+                            .on_click(cx.listener(|this, ix: &usize, window, cx| {
+                                this.set_active_tab(*ix, window, cx);
+                            }))
+                            .items_center()
+                            .justify_center()
+                            .child(Tab::new().label("Send").flex_1())
+                            .child(Tab::new().label("Receive").flex_1())
+                            .child(Tab::new().label("Config").flex_1()),
+                    ),
             )
             .child(
                 div()
                     .id("tab-content")
                     .overflow_y_scroll()
-                    .size_full()
+                    .h_full()
+                    .w_4_5()
                     .child(self.render_tab(window, cx)),
             )
     }
 }
 
 fn main() {
-    let app = Application::new().with_assets(gpui_component_assets::Assets);
+    let app = Application::new().with_assets(Assets);
 
     app.run(move |cx| {
         // This must be called before using any GPUI Component features.
