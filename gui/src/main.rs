@@ -2,7 +2,7 @@ mod send;
 
 use gpui::*;
 use gpui_component::tab::{Tab, TabBar};
-use gpui_component::{Root, Theme, ThemeMode, h_flex, v_flex};
+use gpui_component::{Root, Theme, h_flex, v_flex};
 use gpui_component_assets::Assets;
 
 use crate::send::SendView;
@@ -83,14 +83,7 @@ impl Render for MainWindow {
                             .child(Tab::new().label("Config").flex_1()),
                     ),
             )
-            .child(
-                div()
-                    .id("tab-content")
-                    .overflow_y_scroll()
-                    .h_full()
-                    .w_4_5()
-                    .child(self.render_tab(window, cx)),
-            )
+            .child(div().h_full().w_4_5().child(self.render_tab(window, cx)))
     }
 }
 
@@ -106,10 +99,11 @@ fn main() {
                 window.activate_window();
                 window.set_window_title("Vial");
 
-                Theme::change(ThemeMode::Light, Some(window), cx);
+                window.resize(Size::new(850.0.into(), 650.0.into()));
+
+                Theme::sync_system_appearance(Some(window), cx);
 
                 let view = cx.new(|cx| MainWindow::new(window, cx));
-                // This first level on the window, should be a Root.
                 cx.new(|cx| Root::new(view, window, cx))
             })?;
 

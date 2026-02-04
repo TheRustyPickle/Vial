@@ -1,16 +1,25 @@
 use gpui::*;
-use gpui_component::ActiveTheme as _;
 use gpui_component::button::{Button, ButtonVariants};
 use gpui_component::group_box::{GroupBox, GroupBoxVariants};
-use gpui_component::input::{Input, InputState};
+use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::label::Label;
+use gpui_component::progress::Progress;
+use gpui_component::scroll::ScrollableElement;
+use gpui_component::{ActiveTheme as _, Disableable, StyledExt};
 use gpui_component::{IconName, h_flex, v_flex};
 use rfd::FileDialog;
+use std::collections::BTreeSet;
 use std::path::PathBuf;
+
+const MAX_SIZE: u64 = 1024 * 1024 * 5 + 200;
 
 pub struct SendView {
     input_state: Entity<InputState>,
-    files: Vec<PathBuf>,
+    files: BTreeSet<PathBuf>,
+    full_size: u64,
+    file_size: u64,
+    progress: f32,
+    _subscriptions: Vec<Subscription>,
 }
 
 impl SendView {
@@ -24,10 +33,34 @@ impl SendView {
                 .soft_wrap(true)
         });
 
+        let _subscriptions = vec![cx.subscribe_in(&input_state, window, {
+            move |this, _, ev: &InputEvent, _window, cx| {
+                if let InputEvent::Change = ev {
+                    this.update_progress(cx);
+
+                    cx.notify()
+                }
+            }
+        })];
+
         Self {
             input_state,
-            files: vec![],
+            files: BTreeSet::new(),
+            file_size: 0,
+            full_size: 0,
+            progress: 0.0,
+            _subscriptions,
         }
+    }
+
+    fn update_progress(&mut self, cx: &mut Context<Self>) {
+        let total_size = self.input_state.read(cx).value().len() as u64 + self.file_size;
+
+        self.full_size = total_size;
+
+        let progress = total_size as f32 / MAX_SIZE as f32;
+
+        self.progress = progress * 100.0;
     }
 
     fn submit(&mut self, _: &ClickEvent, _window: &mut Window, cx: &mut Context<Self>) {
@@ -35,12 +68,16 @@ impl SendView {
         println!("Submitted: {}", value);
     }
 
-    fn get_files(&mut self, _: &ClickEvent, _window: &mut Window, _cx: &mut Context<Self>) {
+    fn get_files(&mut self, _: &ClickEvent, _window: &mut Window, cx: &mut Context<Self>) {
         let Some(files) = FileDialog::new().pick_files() else {
             return;
         };
 
-        self.files = files;
+        self.files.extend(files);
+
+        self.file_size = self.files.iter().map(|f| f.metadata().unwrap().len()).sum();
+
+        self.update_progress(cx);
     }
 
     fn show_files_title(&mut self) -> impl IntoElement {
@@ -66,11 +103,13 @@ impl SendView {
 
             let size_kb = path.metadata().map(|m| m.len()).unwrap_or(0) / 1024;
 
+            let path = path.clone();
+
             h_flex()
                 .items_center()
                 .gap_3()
                 .rounded_md()
-                .px_2()
+                .px_4()
                 .child(div().flex_1().truncate().child(Label::new(name)))
                 .child(
                     div()
@@ -83,7 +122,7 @@ impl SendView {
                         .icon(IconName::CircleX)
                         .ghost()
                         .on_click(cx.listener(move |this, _, _, _| {
-                            this.files.remove(ix);
+                            this.files.remove(&path);
                         })),
                 )
         }))
@@ -117,8 +156,29 @@ impl Render for SendView {
                                         .on_click(cx.listener(Self::get_files)),
                                 ),
                         )
-                        .child(self.show_files(cx)),
+                        .child(
+                            v_flex()
+                                .id("Files")
+                                .max_h_24()
+                                .overflow_y_scrollbar()
+                                .child(self.show_files(cx)),
+                        ),
                 ),
+            )
+            .child(
+                v_flex()
+                    .justify_center()
+                    .items_center()
+                    .gap_2()
+                    .child(Progress::new().value(self.progress).h_4().rounded_lg())
+                    .child(
+                        Label::new(format!(
+                            "{:.2} MB of {:.2} MB used",
+                            self.full_size as f64 / (1024 * 1024) as f64,
+                            MAX_SIZE as f64 / (1024 * 1024) as f64
+                        ))
+                        .font_semibold(),
+                    ),
             )
             .child(
                 h_flex()
@@ -129,6 +189,7 @@ impl Render for SendView {
                     .child(
                         Button::new("Submit")
                             .label("Submit")
+                            .disabled(self.full_size != 0 || self.full_size > MAX_SIZE)
                             .primary()
                             .w_2_5()
                             .on_click(cx.listener(Self::submit)),
