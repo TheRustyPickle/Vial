@@ -18,3 +18,8 @@ anyhow = "1.0.100"
 inherits = "release"
 lto = "fat"
 codegen-units = 1
+
+[patch.crates-io]
+vial-shared = { path = "shared" }
+vial-srv = { path = "srv-lib" }
+vial-core = { path = "core" }

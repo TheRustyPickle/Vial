@@ -16,6 +16,8 @@ categories = ["GUI"]
 
 [dependencies]
 anyhow.workspace = true
+vial-core.workspace = true
+vial-shared.workspace = true
 
 gpui = "0.2.2"
 gpui-component = "0.5.0"
