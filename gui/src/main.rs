@@ -48,7 +48,7 @@ impl MainWindow {
 
     fn render_tab(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         match self.active_tab {
-            MainTab::Send => div().child(self.send_view.clone()),
+            MainTab::Send => v_flex().size_full().child(self.send_view.clone()),
             _ => div().child(self.send_view.clone()),
         }
     }
@@ -83,7 +83,7 @@ impl Render for MainWindow {
                             .child(Tab::new().label("Config").flex_1()),
                     ),
             )
-            .child(div().h_full().w_4_5().child(self.render_tab(window, cx)))
+            .child(v_flex().h_full().w_4_5().child(self.render_tab(window, cx)))
     }
 }
 
@@ -99,7 +99,7 @@ fn main() {
                 window.activate_window();
                 window.set_window_title("Vial");
 
-                window.resize(Size::new(850.0.into(), 650.0.into()));
+                window.resize(Size::new(850.0.into(), 800.0.into()));
 
                 Theme::sync_system_appearance(Some(window), cx);
 

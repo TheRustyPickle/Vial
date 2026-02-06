@@ -1,5 +1,6 @@
 use gpui::*;
 use gpui_component::button::{Button, ButtonVariants};
+use gpui_component::clipboard::Clipboard;
 use gpui_component::group_box::{GroupBox, GroupBoxVariants};
 use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::label::Label;
@@ -14,7 +15,9 @@ use std::path::PathBuf;
 const MAX_SIZE: u64 = 1024 * 1024 * 5 + 200;
 
 pub struct SendView {
-    input_state: Entity<InputState>,
+    to_encrypt: Entity<InputState>,
+    secret_url_state: Entity<InputState>,
+    secret_url: String,
     files: BTreeSet<PathBuf>,
     full_size: u64,
     file_size: u64,
@@ -24,7 +27,7 @@ pub struct SendView {
 
 impl SendView {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let input_state = cx.new(|cx| {
+        let to_encrypt = cx.new(|cx| {
             InputState::new(window, cx)
                 .multi_line(true)
                 .auto_grow(7, 7)
@@ -33,7 +36,13 @@ impl SendView {
                 .soft_wrap(true)
         });
 
-        let _subscriptions = vec![cx.subscribe_in(&input_state, window, {
+        let secret_url_state = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder("Encrypt something to get a link!")
+                .multi_line(false)
+        });
+
+        let mut subscriptions = vec![cx.subscribe_in(&to_encrypt, window, {
             move |this, _, ev: &InputEvent, _window, cx| {
                 if let InputEvent::Change = ev {
                     this.update_progress(cx);
@@ -43,29 +52,56 @@ impl SendView {
             }
         })];
 
+        subscriptions.push(cx.subscribe_in(&secret_url_state, window, {
+            move |this, _, ev: &InputEvent, window, cx| {
+                if let InputEvent::Change = ev {
+                    this.reset_secret_url(window, cx);
+                    cx.notify()
+                }
+            }
+        }));
+
         Self {
-            input_state,
+            to_encrypt,
+            secret_url: String::new(),
+            secret_url_state,
             files: BTreeSet::new(),
             file_size: 0,
             full_size: 0,
             progress: 0.0,
-            _subscriptions,
+            _subscriptions: subscriptions,
         }
     }
 
+    fn reset_secret_url(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let current_state = self.secret_url_state.read(cx).value();
+
+        if current_state == self.secret_url {
+            return;
+        }
+
+        self.secret_url_state.update(cx, |state, cx| {
+            state.set_value(self.secret_url.clone(), window, cx);
+        });
+    }
+
     fn update_progress(&mut self, cx: &mut Context<Self>) {
-        let total_size = self.input_state.read(cx).value().len() as u64 + self.file_size;
+        let total_size_text = self.to_encrypt.read(cx).value().len() as u64;
+        let total_size_files: u64 = self.files.iter().map(|f| f.metadata().unwrap().len()).sum();
 
-        self.full_size = total_size;
+        self.full_size = total_size_text + total_size_files;
 
-        let progress = total_size as f32 / MAX_SIZE as f32;
+        self.file_size = total_size_files;
+
+        let progress = self.full_size as f32 / MAX_SIZE as f32;
 
         self.progress = progress * 100.0;
     }
 
-    fn submit(&mut self, _: &ClickEvent, _window: &mut Window, cx: &mut Context<Self>) {
-        let value = self.input_state.read(cx).value();
-        println!("Submitted: {}", value);
+    fn submit(&mut self, _: &ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
+        let _value = self.to_encrypt.read(cx).value();
+        self.secret_url = String::from("https://google.com");
+        self.reset_secret_url(window, cx);
     }
 
     fn get_files(&mut self, _: &ClickEvent, _window: &mut Window, cx: &mut Context<Self>) {
@@ -74,8 +110,6 @@ impl SendView {
         };
 
         self.files.extend(files);
-
-        self.file_size = self.files.iter().map(|f| f.metadata().unwrap().len()).sum();
 
         self.update_progress(cx);
     }
@@ -107,7 +141,7 @@ impl SendView {
 
             h_flex()
                 .items_center()
-                .gap_3()
+                .gap_2()
                 .rounded_md()
                 .px_4()
                 .child(div().flex_1().truncate().child(Label::new(name)))
@@ -121,8 +155,9 @@ impl SendView {
                     Button::new(SharedString::new(format!("remove-button-{ix}")))
                         .icon(IconName::CircleX)
                         .ghost()
-                        .on_click(cx.listener(move |this, _, _, _| {
+                        .on_click(cx.listener(move |this, _, _, cx| {
                             this.files.remove(&path);
+                            this.update_progress(cx);
                         })),
                 )
         }))
@@ -133,8 +168,9 @@ impl Render for SendView {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         v_flex()
             .gap_2()
+            .h_full()
             .child(
-                Input::new(&self.input_state)
+                Input::new(&self.to_encrypt)
                     .border_2()
                     .rounded_lg()
                     .border_color(cx.theme().border),
@@ -159,7 +195,7 @@ impl Render for SendView {
                         .child(
                             v_flex()
                                 .id("Files")
-                                .max_h_24()
+                                .max_h_40()
                                 .overflow_y_scrollbar()
                                 .child(self.show_files(cx)),
                         ),
@@ -181,18 +217,28 @@ impl Render for SendView {
                     ),
             )
             .child(
-                h_flex()
-                    .justify_center()
+                h_flex().justify_center().items_center().pt_10().child(
+                    Button::new("Submit")
+                        .label("Submit")
+                        .disabled(self.full_size == 0 || self.full_size > MAX_SIZE)
+                        .primary()
+                        .w_2_5()
+                        .on_click(cx.listener(Self::submit)),
+                ),
+            )
+            .child(
+                v_flex()
+                    .w_full()
                     .items_center()
-                    .pt_10()
-                    .pb_5()
+                    .h_full()
+                    .justify_end()
+                    .pb_10()
+                    .pt_5()
                     .child(
-                        Button::new("Submit")
-                            .label("Submit")
-                            .disabled(self.full_size != 0 || self.full_size > MAX_SIZE)
-                            .primary()
-                            .w_2_5()
-                            .on_click(cx.listener(Self::submit)),
+                        Input::new(&self.secret_url_state)
+                            .border_2()
+                            .rounded_lg()
+                            .suffix(Clipboard::new("clipboard").value(self.secret_url.clone())),
                     ),
             )
     }
