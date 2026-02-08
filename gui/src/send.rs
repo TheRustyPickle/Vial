@@ -6,14 +6,16 @@ use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::label::Label;
 use gpui_component::progress::Progress;
 use gpui_component::scroll::ScrollableElement;
-use gpui_component::{ActiveTheme as _, Disableable, StyledExt};
+use gpui_component::{ActiveTheme as _, Disableable, PixelsExt, StyledExt};
 use gpui_component::{IconName, h_flex, v_flex};
 use rfd::FileDialog;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
+use std::time::Duration;
 
 const MAX_SIZE: u64 = 1024 * 1024 * 5 + 200;
 
+#[derive(Clone)]
 pub struct SendView {
     to_encrypt: Entity<InputState>,
     secret_url_state: Entity<InputState>,
@@ -22,7 +24,6 @@ pub struct SendView {
     full_size: u64,
     file_size: u64,
     progress: f32,
-    _subscriptions: Vec<Subscription>,
 }
 
 impl SendView {
@@ -42,7 +43,7 @@ impl SendView {
                 .multi_line(false)
         });
 
-        let mut subscriptions = vec![cx.subscribe_in(&to_encrypt, window, {
+        cx.subscribe_in(&to_encrypt, window, {
             move |this, _, ev: &InputEvent, _window, cx| {
                 if let InputEvent::Change = ev {
                     this.update_progress(cx);
@@ -50,16 +51,18 @@ impl SendView {
                     cx.notify()
                 }
             }
-        })];
+        })
+        .detach();
 
-        subscriptions.push(cx.subscribe_in(&secret_url_state, window, {
+        cx.subscribe_in(&secret_url_state, window, {
             move |this, _, ev: &InputEvent, window, cx| {
                 if let InputEvent::Change = ev {
                     this.reset_secret_url(window, cx);
                     cx.notify()
                 }
             }
-        }));
+        })
+        .detach();
 
         Self {
             to_encrypt,
@@ -69,7 +72,6 @@ impl SendView {
             file_size: 0,
             full_size: 0,
             progress: 0.0,
-            _subscriptions: subscriptions,
         }
     }
 
@@ -162,10 +164,53 @@ impl SendView {
                 )
         }))
     }
+
+    fn show_url_input(&mut self, window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        let window_size = window.viewport_size().width;
+
+        let url_state = self.secret_url_state.clone();
+
+        let url = self.secret_url.clone();
+
+        if self.secret_url.is_empty() {
+            return div().into_any_element();
+        }
+
+        v_flex()
+            .w_full()
+            .items_center()
+            .h_full()
+            .justify_end()
+            .pb_10()
+            .pt_5()
+            .with_animation(
+                "url_input",
+                Animation::new(Duration::from_millis(1000)).with_easing(ease_out_quint()),
+                move |this_div, value| {
+                    let target_w = window_size.as_f32();
+                    let current_w = value * target_w;
+
+                    this_div
+                        .w_full()
+                        .items_center()
+                        .h_full()
+                        .justify_end()
+                        .child(
+                            v_flex().w(px(current_w)).max_w_full().child(
+                                Input::new(&url_state)
+                                    .border_2()
+                                    .rounded_lg()
+                                    .suffix(Clipboard::new("clipboard").value(url.clone())),
+                            ),
+                        )
+                },
+            )
+            .into_any_element()
+    }
 }
 
 impl Render for SendView {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         v_flex()
             .gap_2()
             .h_full()
@@ -226,20 +271,6 @@ impl Render for SendView {
                         .on_click(cx.listener(Self::submit)),
                 ),
             )
-            .child(
-                v_flex()
-                    .w_full()
-                    .items_center()
-                    .h_full()
-                    .justify_end()
-                    .pb_10()
-                    .pt_5()
-                    .child(
-                        Input::new(&self.secret_url_state)
-                            .border_2()
-                            .rounded_lg()
-                            .suffix(Clipboard::new("clipboard").value(self.secret_url.clone())),
-                    ),
-            )
+            .child(self.show_url_input(window, cx))
     }
 }
