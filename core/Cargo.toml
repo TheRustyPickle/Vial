@@ -2,28 +2,25 @@
 name = "vial-core"
 version = "0.1.0"
 edition = "2024"
-authors = ["TheRustyPickle <rusty.pickle94@gmail.com>"]
 description = """
 Crypto primitives for encrypting / decrypting for Vial
 """
 homepage = "https://github.com/TheRustyPickle/Vial"
 repository = "https://github.com/TheRustyPickle/Vial"
 license = "MIT"
-keywords = ["cli", "e2ee", "secret", "vault", "secure"]
+keywords = ["cli", "e2ee", "secret", "secure", "vault"]
 categories = ["command-line-utilities"]
 
-
 [dependencies]
-anyhow.workspace = true
-
-chacha20poly1305 = "0.10.1"
-argon2 = { version = "0.5.3", default-features = false, features = ["std"] }
 aead = "0.5.2"
+anyhow.workspace = true
+argon2 = { version = "0.5.3", default-features = false, features = ["std"] }
+chacha20poly1305 = "0.10.1"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 rand = "0.9.2"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-rand = "0.9"
 getrandom = { version = "0.3.4", features = ["wasm_js"] }
 getrandom02 = { package = "getrandom", version = "0.2", features = ["js"] }
+rand = "0.9"

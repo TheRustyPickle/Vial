@@ -2,15 +2,14 @@
 name = "vial-server"
 version = "0.1.0"
 edition = "2024"
-authors = ["TheRustyPickle <rusty.pickle94@gmail.com>"]
-readme = "README.md"
 description = """
 Server for creating and retrieving end-to-end encrypted secrets for Vial
 """
+readme = "README.md"
 homepage = "https://github.com/TheRustyPickle/Vial"
 repository = "https://github.com/TheRustyPickle/Vial"
 license = "MIT"
-keywords = ["cli", "e2ee", "secret", "vault", "secure"]
+keywords = ["cli", "e2ee", "secret", "secure", "vault"]
 categories = ["command-line-utilities"]
 
 [[bin]]
@@ -18,11 +17,10 @@ name = "vial-server"
 path = "src/main.rs"
 
 [dependencies]
-vial-srv.workspace = true
-vial-shared.workspace = true
-tokio.workspace = true
-
 actix-web = "4.12.1"
 dotenvy = "0.15.7"
 log = "0.4.29"
 pretty_env_logger = "0.5.0"
+tokio.workspace = true
+vial-shared.workspace = true
+vial-srv.workspace = true

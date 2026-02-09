@@ -2,28 +2,26 @@
 name = "vial-srv"
 version = "0.1.0"
 edition = "2024"
-authors = ["TheRustyPickle <rusty.pickle94@gmail.com>"]
-readme = "README.md"
 description = """
 Framework-agnostic server logic for Vial
 """
+readme = "README.md"
 homepage = "https://github.com/TheRustyPickle/Vial"
 repository = "https://github.com/TheRustyPickle/Vial"
 license = "MIT"
-keywords = ["cli", "e2ee", "secret", "vault", "secure"]
+keywords = ["cli", "e2ee", "secret", "secure", "vault"]
 categories = ["command-line-utilities"]
 
 [dependencies]
-vial-shared.workspace = true
 chrono.workspace = true
-tokio.workspace = true
-
 diesel = { version = "2.3.5", features = ["chrono"] }
-diesel-async = { version = "0.7.4", features = ["bb8", "postgres", "migrations"] }
+diesel-async = { version = "0.7.4", features = ["bb8", "migrations", "postgres"] }
 diesel_migrations = "2.3.1"
-rustls = { version = "0.23.36", features = ["ring"] }
-tokio-postgres = "0.7.15"
 futures-util = "0.3.31"
+rustls = { version = "0.23.36", features = ["ring"] }
+thiserror = "2.0.17"
+tokio.workspace = true
+tokio-postgres = "0.7.15"
 tokio-postgres-rustls = "0.13.0"
 ulid = "1.2.1"
-thiserror = "2.0.17"
+vial-shared.workspace = true

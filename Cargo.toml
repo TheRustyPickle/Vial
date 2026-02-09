@@ -1,25 +1,24 @@
 [workspace]
-members = ["cli", "server", "srv-lib", "core", "shared", "gui"]
-
 resolver = "2"
+members = ["cli", "core", "gui", "server", "shared", "srv-lib"]
 
 [workspace.dependencies]
-vial-core = "0.1.0"
-vial-srv = "0.1.0"
-vial-shared = "0.1.0"
+anyhow = "1.0.100"
 chrono = { version = "0.4.42", features = ["serde"] }
-tokio = { version = "1.49.0", features = ["rt-multi-thread", "macros"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
-anyhow = "1.0.100"
+tokio = { version = "1.49.0", features = ["macros", "rt-multi-thread"] }
+vial-core = "0.1.0"
+vial-shared = "0.1.0"
+vial-srv = "0.1.0"
+
+[patch.crates-io]
+vial-core = { path = "core" }
+vial-shared = { path = "shared" }
+vial-srv = { path = "srv-lib" }
 
 # The profile that 'dist' will build with
 [profile.dist]
 inherits = "release"
 lto = "fat"
 codegen-units = 1
-
-[patch.crates-io]
-vial-shared = { path = "shared" }
-vial-srv = { path = "srv-lib" }
-vial-core = { path = "core" }
