@@ -7759,7 +7759,9 @@ dependencies = [
 name = "vial-shared"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "chrono",
+ "dirs 6.0.0",
  "postcard",
  "serde",
  "serde_json",

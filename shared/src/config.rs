@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::fs::{File, create_dir_all, read};
 use std::path::PathBuf;
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize, Default, Clone)]
 pub struct Config {
     pub download_path: Option<PathBuf>,
     pub server_url: Option<String>,
