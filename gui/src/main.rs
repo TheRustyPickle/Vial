@@ -1,9 +1,11 @@
 mod send;
+mod crypto;
 
 use gpui::*;
 use gpui_component::tab::{Tab, TabBar};
 use gpui_component::{Root, Theme, h_flex, v_flex};
 use gpui_component_assets::Assets;
+use vial_shared::config::Config;
 
 use crate::send::SendView;
 
@@ -33,7 +35,8 @@ struct MainWindow {
 
 impl MainWindow {
     fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let send_entity = cx.new(|cx| SendView::new(window, cx));
+        let config = Config::get_config().unwrap_or_default();
+        let send_entity = cx.new(|cx| SendView::new(config, window, cx));
 
         Self {
             active_tab: MainTab::default(),
@@ -91,7 +94,6 @@ fn main() {
     let app = Application::new().with_assets(Assets);
 
     app.run(move |cx| {
-        // This must be called before using any GPUI Component features.
         gpui_component::init(cx);
 
         cx.spawn(async move |cx| {

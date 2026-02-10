@@ -5,18 +5,22 @@ use gpui_component::group_box::{GroupBox, GroupBoxVariants};
 use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::label::Label;
 use gpui_component::progress::Progress;
+use gpui_component::radio::{Radio, RadioGroup};
 use gpui_component::scroll::ScrollableElement;
-use gpui_component::{ActiveTheme as _, Disableable, PixelsExt, StyledExt};
+use gpui_component::tooltip::Tooltip;
+use gpui_component::{ActiveTheme as _, Disableable, PixelsExt, Root, StyledExt, WindowExt};
 use gpui_component::{IconName, h_flex, v_flex};
 use rfd::FileDialog;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::time::Duration;
+use vial_shared::config::Config;
 
-const MAX_SIZE: u64 = 1024 * 1024 * 5 + 200;
+use crate::crypto::{DEFAULT_SERVER_URL, MAX_SIZE, Schema, ToEncrypt};
 
 #[derive(Clone)]
 pub struct SendView {
+    config: Config,
     to_encrypt: Entity<InputState>,
     secret_url_state: Entity<InputState>,
     secret_url: String,
@@ -24,10 +28,14 @@ pub struct SendView {
     full_size: u64,
     file_size: u64,
     progress: f32,
+    loading: bool,
+    schema_index: usize,
+    password_entity: Entity<InputState>,
+    password: Entity<Option<String>>,
 }
 
 impl SendView {
-    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub fn new(config: Config, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let to_encrypt = cx.new(|cx| {
             InputState::new(window, cx)
                 .multi_line(true)
@@ -42,6 +50,25 @@ impl SendView {
                 .placeholder("Encrypt something to get a link!")
                 .multi_line(false)
         });
+
+        let password_state = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder("Enter a password to encrypt with")
+                .multi_line(false)
+                .masked(true)
+        });
+
+        let password = cx.new(|_| None);
+
+        cx.observe(&password, |this, state, cx| {
+            let value = state.read(cx);
+
+            if value.is_some() {
+                this.loading = true;
+                this.start_encryption(cx);
+            }
+        })
+        .detach();
 
         cx.subscribe_in(&to_encrypt, window, {
             move |this, _, ev: &InputEvent, _window, cx| {
@@ -65,6 +92,7 @@ impl SendView {
         .detach();
 
         Self {
+            config,
             to_encrypt,
             secret_url: String::new(),
             secret_url_state,
@@ -72,6 +100,10 @@ impl SendView {
             file_size: 0,
             full_size: 0,
             progress: 0.0,
+            loading: false,
+            schema_index: 0,
+            password_entity: password_state,
+            password,
         }
     }
 
@@ -101,9 +133,73 @@ impl SendView {
     }
 
     fn submit(&mut self, _: &ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
-        let _value = self.to_encrypt.read(cx).value();
-        self.secret_url = String::from("https://google.com");
-        self.reset_secret_url(window, cx);
+        let schema = Schema::from_index(self.schema_index);
+
+        if let Schema::Password = schema
+            && self.password.read(cx).is_none()
+        {
+            let input = self.password_entity.clone();
+            let password = self.password.clone();
+
+            window.open_dialog(cx, move |dialog, _, _| {
+                let input = input.clone();
+                let password = password.clone();
+                dialog
+                    .title("Encrypt Password")
+                    .child(v_flex().gap_3().child(Input::new(&input).mask_toggle()))
+                    .footer(move |_, _, _, _| {
+                        let input = input.clone();
+                        let password = password.clone();
+                        vec![
+                            Button::new("ok").primary().label("Submit").on_click(
+                                move |_, window, cx| {
+                                    password.update(cx, |state, cx| {
+                                        *state = Some("String".to_string());
+                                        cx.notify()
+                                    });
+                                    window.close_dialog(cx);
+                                },
+                            ),
+                            Button::new("cancel")
+                                .label("Cancel")
+                                .on_click(move |_, window, cx| {
+                                    input.update(cx, |state, cx| {
+                                        state.set_value(String::new(), window, cx);
+                                    });
+
+                                    window.close_dialog(cx);
+                                }),
+                        ]
+                    })
+            });
+        } else {
+            self.start_encryption(cx);
+        }
+    }
+
+    fn start_encryption(&mut self, cx: &mut Context<Self>) {
+        let text = self.to_encrypt.read(cx).value().to_string();
+        let files = self.files.clone();
+        let schema = Schema::from_index(self.schema_index);
+
+        let encrypt_task = cx.background_spawn(async move {
+            ToEncrypt::new(text, files, schema, None).create_secret()
+        });
+
+        cx.spawn(async |this, cx| {
+            let result = encrypt_task.await;
+
+            let result = this.update(cx, |this, cx| {
+                this.secret_url = result.unwrap();
+                this.loading = false;
+                cx.notify();
+            });
+
+            if let Err(err) = result {
+                println!("Error: {}", err);
+            }
+        })
+        .detach();
     }
 
     fn get_files(&mut self, _: &ClickEvent, _window: &mut Window, cx: &mut Context<Self>) {
@@ -207,10 +303,54 @@ impl SendView {
             )
             .into_any_element()
     }
+
+    fn show_schema_choice(
+        &mut self,
+        _window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        let random_radio =
+            Radio::new("random")
+                .label("Use Random key schema")
+                .tooltip(|window, cx| {
+                    Tooltip::new("Generate a random key and encrypt the content with it")
+                        .build(window, cx)
+                });
+
+        let password_radio =
+            Radio::new("password")
+                .label("Use Password schema")
+                .tooltip(|window, cx| {
+                    Tooltip::new("Encrypt the content with a password input given by the user")
+                        .build(window, cx)
+                });
+
+        RadioGroup::horizontal("options")
+            .children([random_radio, password_radio])
+            .selected_index(Some(self.schema_index))
+            .on_click(cx.listener(|view, selected_index: &usize, _, cx| {
+                view.schema_index = *selected_index;
+                cx.notify();
+            }))
+    }
+
+    fn max_size(&self) -> usize {
+        if let Some(max_size) = self.config.max_size
+            && let Some(url) = &self.config.server_url
+            && url != DEFAULT_SERVER_URL
+        {
+            max_size
+        } else {
+            MAX_SIZE
+        }
+    }
 }
 
 impl Render for SendView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let dialog_layer = Root::render_dialog_layer(window, cx);
+        self.reset_secret_url(window, cx);
+
         v_flex()
             .gap_2()
             .h_full()
@@ -256,21 +396,24 @@ impl Render for SendView {
                         Label::new(format!(
                             "{:.2} MB of {:.2} MB used",
                             self.full_size as f64 / (1024 * 1024) as f64,
-                            MAX_SIZE as f64 / (1024 * 1024) as f64
+                            self.max_size() as f64 / (1024 * 1024) as f64
                         ))
                         .font_semibold(),
                     ),
             )
+            .child(div().child(self.show_schema_choice(window, cx)))
             .child(
                 h_flex().justify_center().items_center().pt_10().child(
                     Button::new("Submit")
                         .label("Submit")
-                        .disabled(self.full_size == 0 || self.full_size > MAX_SIZE)
+                        .disabled(self.full_size == 0 || self.full_size > self.max_size() as u64)
                         .primary()
+                        .loading(self.loading)
                         .w_2_5()
                         .on_click(cx.listener(Self::submit)),
                 ),
             )
             .child(self.show_url_input(window, cx))
+            .children(dialog_layer)
     }
 }
