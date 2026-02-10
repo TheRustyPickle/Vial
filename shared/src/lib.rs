@@ -1,3 +1,6 @@
+#[cfg(not(target_arch = "wasm32"))]
+pub mod config;
+
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;

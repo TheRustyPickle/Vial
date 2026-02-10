@@ -2,15 +2,14 @@ use anyhow::{Context, Result, anyhow};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE};
 use chrono::{Days, Utc};
 use clap::{Args, Parser, Subcommand};
-use dirs::config_dir;
-use serde::{Deserialize, Serialize};
 use std::env::set_current_dir;
-use std::fs::{File, create_dir_all, read};
+use std::fs::read;
 use std::io::{Write as _, stdin, stdout};
 use std::path::{Path, PathBuf};
 use vial_core::crypto::{
     decrypt_with_password, decrypt_with_random_key, encrypt_with_password, encrypt_with_random_key,
 };
+use vial_shared::config::Config;
 use vial_shared::{
     CreateSecretRequest, EncryptedPayload, FullSecretV1, Payload, SecretFile, SecretFileV1,
     SecretId, sanitize_filename,
@@ -24,86 +23,6 @@ const DEFAULT_WEB_URL: &str = "https://rustypickle.onrender.com/secrets";
 struct Cli {
     #[command(subcommand)]
     command: Command,
-}
-
-#[derive(Serialize, Deserialize, Default)]
-struct Config {
-    download_path: Option<PathBuf>,
-    server_url: Option<String>,
-    max_size: Option<usize>,
-    web_ui_url: Option<String>,
-}
-
-impl Config {
-    fn get_config() -> Result<Self> {
-        let mut target_path = config_dir().unwrap();
-
-        target_path.push("Vial");
-
-        create_dir_all(&target_path)?;
-
-        target_path.push("vial.json");
-
-        if target_path.exists() {
-            let contents = read(target_path)?;
-            Ok(serde_json::from_slice(&contents)?)
-        } else {
-            let config = Config {
-                download_path: None,
-                server_url: None,
-                max_size: None,
-                web_ui_url: None,
-            };
-
-            config.save_config()?;
-
-            Ok(config)
-        }
-    }
-
-    fn set_download_path(&mut self, path: PathBuf) -> Result<()> {
-        self.download_path = Some(path);
-
-        self.save_config()?;
-
-        Ok(())
-    }
-
-    fn set_server_url(&mut self, url: String) -> Result<()> {
-        self.server_url = Some(url);
-
-        self.save_config()?;
-
-        Ok(())
-    }
-
-    fn set_web_ui_url(&mut self, url: String) -> Result<()> {
-        self.web_ui_url = Some(url);
-
-        self.save_config()?;
-
-        Ok(())
-    }
-
-    fn set_max_size(&mut self, size: usize) -> Result<()> {
-        self.max_size = Some(size);
-
-        self.save_config()?;
-
-        Ok(())
-    }
-
-    fn save_config(&self) -> Result<()> {
-        let mut target_path = config_dir().unwrap();
-
-        target_path.push("Vial");
-
-        target_path.push("vial.json");
-
-        let mut file = File::create(target_path)?;
-        serde_json::to_writer(&mut file, self)?;
-        Ok(())
-    }
 }
 
 #[derive(Subcommand, Debug)]
