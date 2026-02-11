@@ -2,7 +2,9 @@ use gpui::*;
 use gpui_component::button::{Button, ButtonVariants};
 use gpui_component::clipboard::Clipboard;
 use gpui_component::group_box::{GroupBox, GroupBoxVariants};
-use gpui_component::input::{Input, InputEvent, InputState};
+use gpui_component::input::{
+    Input, InputEvent, InputState, NumberInput, NumberInputEvent, StepAction,
+};
 use gpui_component::label::Label;
 use gpui_component::progress::Progress;
 use gpui_component::radio::{Radio, RadioGroup};
@@ -10,13 +12,14 @@ use gpui_component::scroll::ScrollableElement;
 use gpui_component::tooltip::Tooltip;
 use gpui_component::{ActiveTheme as _, Disableable, PixelsExt, Root, StyledExt, WindowExt};
 use gpui_component::{IconName, h_flex, v_flex};
+use regex::Regex;
 use rfd::FileDialog;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::time::Duration;
 use vial_shared::config::Config;
 
-use crate::crypto::{DEFAULT_SERVER_URL, MAX_SIZE, Schema, ToEncrypt};
+use crate::crypto::{DEFAULT_SERVER_URL, DEFAULT_WEB_URL, MAX_SIZE, Params, Schema, ToEncrypt};
 
 #[derive(Clone)]
 pub struct SendView {
@@ -32,6 +35,8 @@ pub struct SendView {
     schema_index: usize,
     password_entity: Entity<InputState>,
     password: Entity<Option<String>>,
+    max_view_state: Entity<InputState>,
+    max_day_count_state: Entity<InputState>,
 }
 
 impl SendView {
@@ -57,6 +62,32 @@ impl SendView {
                 .multi_line(false)
                 .masked(true)
         });
+
+        let max_view_state = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder("Enter max view count")
+                .default_value("0")
+                .pattern(Regex::new(r"^\d+$").unwrap())
+        });
+        let max_day_count_state = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder("Enter max day count")
+                .default_value("0")
+        });
+
+        cx.subscribe_in(&max_view_state, window, |view, state, event, window, cx| {
+            view.handle_incre_decre(window, state, cx, event);
+        })
+        .detach();
+
+        cx.subscribe_in(
+            &max_day_count_state,
+            window,
+            |view, state, event, window, cx| {
+                view.handle_incre_decre(window, state, cx, event);
+            },
+        )
+        .detach();
 
         let password = cx.new(|_| None);
 
@@ -84,7 +115,7 @@ impl SendView {
         cx.subscribe_in(&secret_url_state, window, {
             move |this, _, ev: &InputEvent, window, cx| {
                 if let InputEvent::Change = ev {
-                    this.reset_secret_url(window, cx);
+                    this.sync_secret_url(window, cx);
                     cx.notify()
                 }
             }
@@ -104,10 +135,59 @@ impl SendView {
             schema_index: 0,
             password_entity: password_state,
             password,
+            max_view_state,
+            max_day_count_state,
         }
     }
 
-    fn reset_secret_url(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn handle_incre_decre(
+        &mut self,
+        window: &mut Window,
+        state: &Entity<InputState>,
+        cx: &mut Context<Self>,
+        event: &NumberInputEvent,
+    ) {
+        match event {
+            NumberInputEvent::Step(step_action) => match step_action {
+                StepAction::Increment => {
+                    let read_value = state.read(cx).value();
+
+                    let Ok(current_value) = read_value.parse::<i32>() else {
+                        if read_value.is_empty() {
+                            state.update(cx, |input, cx| {
+                                input.set_value(String::from("1"), window, cx);
+                            });
+                        }
+                        return;
+                    };
+
+                    let current_value = current_value + 1;
+
+                    state.update(cx, |input, cx| {
+                        input.set_value(current_value.to_string(), window, cx);
+                    });
+                }
+                StepAction::Decrement => {
+                    let read_value = state.read(cx).value();
+                    let Ok(current_value) = read_value.parse::<i32>() else {
+                        if read_value.is_empty() {
+                            state.update(cx, |input, cx| {
+                                input.set_value(String::from("1"), window, cx);
+                            });
+                        }
+                        return;
+                    };
+
+                    let current_value = current_value - 1;
+                    state.update(cx, |input, cx| {
+                        input.set_value(current_value.to_string(), window, cx);
+                    });
+                }
+            },
+        }
+    }
+
+    fn sync_secret_url(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let current_state = self.secret_url_state.read(cx).value();
 
         if current_state == self.secret_url {
@@ -182,8 +262,20 @@ impl SendView {
         let files = self.files.clone();
         let schema = Schema::from_index(self.schema_index);
 
+        let password = if let Schema::Password = schema {
+            self.password.read(cx).clone()
+        } else {
+            None
+        };
+
+        let params = Params {
+            max_size: self.max_size(),
+            server_url: self.server_url(),
+            web_ui_url: self.web_ui_url(),
+        };
+
         let encrypt_task = cx.background_spawn(async move {
-            ToEncrypt::new(text, files, schema, None).create_secret()
+            ToEncrypt::new(text, files, schema, password, params).create_secret()
         });
 
         cx.spawn(async |this, cx| {
@@ -233,7 +325,8 @@ impl SendView {
                 .map(|n| n.to_string_lossy().to_string())
                 .unwrap_or_else(|| "Unknown file".into());
 
-            let size_kb = path.metadata().map(|m| m.len()).unwrap_or(0) / 1024;
+            let size =
+                self.byte_size_to_readable(path.metadata().map(|m| m.len()).unwrap_or(0) as f64);
 
             let path = path.clone();
 
@@ -245,9 +338,9 @@ impl SendView {
                 .child(div().flex_1().truncate().child(Label::new(name)))
                 .child(
                     div()
-                        .w_16()
+                        .w_24()
                         .text_align(TextAlign::Right)
-                        .child(Label::new(format!("{size_kb} KB"))),
+                        .child(Label::new(size)),
                 )
                 .child(
                     Button::new(SharedString::new(format!("remove-button-{ix}")))
@@ -334,6 +427,60 @@ impl SendView {
             }))
     }
 
+    fn show_limitations(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> impl IntoElement {
+        h_flex()
+            .size_full()
+            .gap_2()
+            .child(
+                GroupBox::new().outline().child(
+                    v_flex()
+                        .id("view-count")
+                        .tooltip(|window, cx| {
+                            Tooltip::new(
+                                "How many times this secret can be viewed. If both set, whichever reaches first invalidates the secret. Set 0 to disable",
+                            )
+                            .build(window, cx)
+                        })
+                        .gap_2()
+                        .child(
+                            h_flex()
+                                .size_full()
+                                .justify_center()
+                                .items_center()
+                                .child(Label::new("Max view count")),
+                        )
+                        .child(NumberInput::new(&self.max_view_state).suffix(Label::new("Times"))),
+                ),
+            )
+            .child(
+                GroupBox::new().outline().child(
+                    v_flex()
+                        .id("day-count")
+                        .tooltip(|window, cx| {
+                            Tooltip::new(
+                                "How many days this secret will be available. If both set, whichever reaches first invalidates the secret. Set 0 to disable",
+                            )
+                            .build(window, cx)
+                        })
+                        .gap_2()
+                        .child(
+                            h_flex()
+                                .size_full()
+                                .justify_center()
+                                .items_center()
+                                .child(Label::new("Max day count")),
+                        )
+                        .child(
+                            NumberInput::new(&self.max_day_count_state).suffix(Label::new("Days")),
+                        ),
+                ),
+            )
+    }
+
     fn max_size(&self) -> usize {
         if let Some(max_size) = self.config.max_size
             && let Some(url) = &self.config.server_url
@@ -344,12 +491,43 @@ impl SendView {
             MAX_SIZE
         }
     }
+
+    fn server_url(&self) -> String {
+        self.config
+            .server_url
+            .clone()
+            .unwrap_or_else(|| DEFAULT_SERVER_URL.to_string())
+    }
+
+    fn web_ui_url(&self) -> String {
+        self.config
+            .web_ui_url
+            .clone()
+            .unwrap_or_else(|| DEFAULT_WEB_URL.to_string())
+    }
+
+    fn byte_size_to_readable(&self, len: f64) -> String {
+        let kb = len / 1024.0;
+
+        if kb > 1024.0 {
+            let mb = kb / 1024.0;
+
+            if mb > 1024.0 {
+                let gb = mb / 1024.0;
+                format!("{gb:.2} GB")
+            } else {
+                format!("{mb:.2} MB")
+            }
+        } else {
+            format!("{kb:.2} KB")
+        }
+    }
 }
 
 impl Render for SendView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let dialog_layer = Root::render_dialog_layer(window, cx);
-        self.reset_secret_url(window, cx);
+        self.sync_secret_url(window, cx);
 
         v_flex()
             .gap_2()
@@ -394,16 +572,17 @@ impl Render for SendView {
                     .child(Progress::new().value(self.progress).h_4().rounded_lg())
                     .child(
                         Label::new(format!(
-                            "{:.2} MB of {:.2} MB used",
-                            self.full_size as f64 / (1024 * 1024) as f64,
-                            self.max_size() as f64 / (1024 * 1024) as f64
+                            "{} of {} used",
+                            self.byte_size_to_readable(self.full_size as f64),
+                            self.byte_size_to_readable(self.max_size() as f64)
                         ))
                         .font_semibold(),
                     ),
             )
-            .child(div().child(self.show_schema_choice(window, cx)))
+            .child(div().py_2().child(self.show_limitations(window, cx)))
+            .child(div().py_2().child(self.show_schema_choice(window, cx)))
             .child(
-                h_flex().justify_center().items_center().pt_10().child(
+                h_flex().justify_center().items_center().pt_6().child(
                     Button::new("Submit")
                         .label("Submit")
                         .disabled(self.full_size == 0 || self.full_size > self.max_size() as u64)
