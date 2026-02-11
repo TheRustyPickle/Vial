@@ -9,15 +9,11 @@ use std::path::{Path, PathBuf};
 use vial_core::crypto::{
     decrypt_with_password, decrypt_with_random_key, encrypt_with_password, encrypt_with_random_key,
 };
-use vial_shared::config::Config;
+use vial_shared::config::{Config, DEFAULT_SERVER_URL, DEFAULT_WEB_URL, MAX_SIZE};
 use vial_shared::{
     CreateSecretRequest, EncryptedPayload, FullSecretV1, Payload, SecretFile, SecretFileV1,
     SecretId, sanitize_filename,
 };
-
-const MAX_SIZE: usize = 1024 * 1024 * 5 + 200;
-const DEFAULT_SERVER_URL: &str = "https://rustypickle.onrender.com/api/secrets";
-const DEFAULT_WEB_URL: &str = "https://rustypickle.onrender.com/secrets";
 
 #[derive(Parser, Debug)]
 struct Cli {

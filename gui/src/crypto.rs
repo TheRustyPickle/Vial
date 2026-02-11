@@ -6,10 +6,6 @@ use vial_core::crypto::{
 };
 use vial_shared::{FullSecretV1, SecretFileV1};
 
-pub const MAX_SIZE: usize = 1024 * 1024 * 5 + 200;
-pub const DEFAULT_SERVER_URL: &str = "https://rustypickle.onrender.com/api/secrets";
-pub const DEFAULT_WEB_URL: &str = "https://rustypickle.onrender.com/secrets";
-
 #[derive(Clone, Copy)]
 pub enum Schema {
     Random,

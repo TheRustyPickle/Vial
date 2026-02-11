@@ -4,12 +4,22 @@ use serde::{Deserialize, Serialize};
 use std::fs::{File, create_dir_all, read};
 use std::path::PathBuf;
 
+pub const MAX_SIZE: usize = 1024 * 1024 * 5 + 200;
+pub const MAX_DAY_COUNT: usize = 30;
+pub const MAX_VIEW_COUNT: usize = 1000;
+pub const DEFAULT_SERVER_URL: &str = "https://rustypickle.onrender.com/api/secrets";
+pub const DEFAULT_WEB_URL: &str = "https://rustypickle.onrender.com/secrets";
+
 #[derive(Serialize, Deserialize, Default, Clone)]
 pub struct Config {
+    /// Path to save downloaded files
     pub download_path: Option<PathBuf>,
+    /// The URL where secret create and fetch request is sent
     pub server_url: Option<String>,
     pub max_size: Option<usize>,
     pub web_ui_url: Option<String>,
+    pub max_views: Option<usize>,
+    pub max_days: Option<usize>,
 }
 
 impl Config {
@@ -26,12 +36,7 @@ impl Config {
             let contents = read(target_path)?;
             Ok(serde_json::from_slice(&contents)?)
         } else {
-            let config = Config {
-                download_path: None,
-                server_url: None,
-                max_size: None,
-                web_ui_url: None,
-            };
+            let config = Config::default();
 
             config.save_config()?;
 
@@ -65,6 +70,22 @@ impl Config {
 
     pub fn set_max_size(&mut self, size: usize) -> Result<()> {
         self.max_size = Some(size);
+
+        self.save_config()?;
+
+        Ok(())
+    }
+
+    pub fn set_max_views(&mut self, views: usize) -> Result<()> {
+        self.max_views = Some(views);
+
+        self.save_config()?;
+
+        Ok(())
+    }
+
+    pub fn set_max_days(&mut self, days: usize) -> Result<()> {
+        self.max_days = Some(days);
 
         self.save_config()?;
 

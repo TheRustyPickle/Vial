@@ -17,9 +17,9 @@ use rfd::FileDialog;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::time::Duration;
-use vial_shared::config::Config;
+use vial_shared::config::{Config, DEFAULT_SERVER_URL, DEFAULT_WEB_URL, MAX_DAY_COUNT, MAX_SIZE};
 
-use crate::crypto::{DEFAULT_SERVER_URL, DEFAULT_WEB_URL, MAX_SIZE, Params, Schema, ToEncrypt};
+use crate::crypto::{Params, Schema, ToEncrypt};
 
 #[derive(Clone)]
 pub struct SendView {
@@ -489,6 +489,14 @@ impl SendView {
             max_size
         } else {
             MAX_SIZE
+        }
+    }
+
+    fn max_day_count(&self) -> usize {
+        if let Some(max_day_count) = self.config.max_days {
+            max_day_count
+        } else {
+            MAX_DAY_COUNT
         }
     }
 
