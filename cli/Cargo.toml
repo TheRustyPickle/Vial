@@ -27,4 +27,4 @@ rpassword = "7.4.0"
 serde.workspace = true
 serde_json.workspace = true
 vial-core.workspace = true
-vial-shared.workspace = true
+vial-shared = { workspace = true, features = ["config"] }

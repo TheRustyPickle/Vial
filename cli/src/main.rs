@@ -288,12 +288,6 @@ fn send(
         ));
     }
 
-    if blob.len() > MAX_SIZE {
-        return Err(anyhow!(
-            "The secret is too large to be sent. Try breaking it up. Max limit is {MAX_SIZE} bytes."
-        ));
-    }
-
     let secret_request = CreateSecretRequest {
         ciphertext: blob,
         expires_at,
