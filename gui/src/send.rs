@@ -1,5 +1,4 @@
 use gpui::*;
-use gpui_component::alert::Alert;
 use gpui_component::button::{Button, ButtonVariants};
 use gpui_component::clipboard::Clipboard;
 use gpui_component::group_box::{GroupBox, GroupBoxVariants};
@@ -7,12 +6,12 @@ use gpui_component::input::{
     Input, InputEvent, InputState, NumberInput, NumberInputEvent, StepAction,
 };
 use gpui_component::label::Label;
-use gpui_component::notification::{Notification, NotificationType};
+use gpui_component::notification::Notification;
 use gpui_component::progress::Progress;
 use gpui_component::radio::{Radio, RadioGroup};
 use gpui_component::scroll::ScrollableElement;
 use gpui_component::tooltip::Tooltip;
-use gpui_component::{ActiveTheme as _, Disableable, PixelsExt, Root, StyledExt, WindowExt};
+use gpui_component::{ActiveTheme as _, Disableable, PixelsExt, StyledExt, WindowExt};
 use gpui_component::{IconName, h_flex, v_flex};
 use regex::Regex;
 use rfd::FileDialog;
@@ -23,7 +22,7 @@ use vial_shared::config::{
     Config, DEFAULT_SERVER_URL, DEFAULT_WEB_URL, MAX_DAY_COUNT, MAX_SIZE, MAX_VIEW_COUNT,
 };
 
-use crate::crypto::{Params, Schema, ToEncrypt};
+use crate::crypto::{Schema, ToEncrypt, Urls};
 
 #[derive(Clone)]
 pub struct SendView {
@@ -233,13 +232,18 @@ impl SendView {
                     .child(v_flex().gap_3().child(Input::new(&input).mask_toggle()))
                     .footer(move |_, _, _, _| {
                         let input = input.clone();
+                        let input_clone = input.clone();
                         let password = password.clone();
                         vec![
                             Button::new("ok").primary().label("Submit").on_click(
                                 move |_, window, cx| {
+                                    let input_value = input_clone.read(cx).value();
                                     password.update(cx, |state, cx| {
-                                        *state = Some("String".to_string());
+                                        *state = Some(input_value.to_string());
                                         cx.notify()
+                                    });
+                                    input_clone.update(cx, |state, cx| {
+                                        state.set_value(String::new(), window, cx);
                                     });
                                     window.close_dialog(cx);
                                 },
@@ -274,14 +278,26 @@ impl SendView {
             None
         };
 
-        let params = Params {
-            max_size: self.max_size(),
+        let params = Urls {
             server_url: self.server_url(),
             web_ui_url: self.web_ui_url(),
         };
 
+        let Ok(max_days) = self.max_day_count_state.read(cx).value().parse::<usize>() else {
+            return;
+        };
+
+        let max_days = if max_days == 0 { None } else { Some(max_days) };
+
+        let Ok(max_view) = self.max_view_state.read(cx).value().parse::<i32>() else {
+            return;
+        };
+
+        let max_view = if max_view == 0 { None } else { Some(max_view) };
+
         let encrypt_task = cx.background_spawn(async move {
-            ToEncrypt::new(text, files, schema, password, params).create_secret()
+            ToEncrypt::new(text, files, schema, password, params, max_days, max_view)
+                .create_secret()
         });
 
         cx.spawn_in(window, async |this, cx| {
@@ -292,6 +308,14 @@ impl SendView {
                     let notification =
                         Notification::error(format!("Error: {e:#}")).title("Encryption Failed");
                     window.push_notification(notification, cx);
+
+                    if let Err(e) = this.update(cx, |this, cx| {
+                        this.loading = false;
+
+                        cx.notify();
+                    }) {
+                        println!("Error while updating: {e}")
+                    };
                 }) {
                     println!("Failed to create notification. Error: {}", e);
                 };
@@ -574,6 +598,7 @@ impl SendView {
             || max_day > self.max_day_count()
             || max_view > self.max_view_count()
             || max_day == 0 && max_view == 0
+            || self.loading
     }
 
     fn reset_all_states(&mut self, cx: &mut Context<Self>, window: &mut Window) {

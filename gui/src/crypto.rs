@@ -1,10 +1,10 @@
 use anyhow::{Context, Result, anyhow};
+use base64::{Engine as _, engine::general_purpose::URL_SAFE};
+use chrono::{Days, Utc};
 use std::path::PathBuf;
 use std::{collections::BTreeSet, fs::read};
-use vial_core::crypto::{
-    decrypt_with_password, decrypt_with_random_key, encrypt_with_password, encrypt_with_random_key,
-};
-use vial_shared::{FullSecretV1, SecretFileV1};
+use vial_core::crypto::{encrypt_with_password, encrypt_with_random_key};
+use vial_shared::{CreateSecretRequest, FullSecretV1, SecretFileV1, SecretId};
 
 #[derive(Clone, Copy)]
 pub enum Schema {
@@ -22,8 +22,7 @@ impl Schema {
     }
 }
 
-pub struct Params {
-    pub max_size: usize,
+pub struct Urls {
     pub server_url: String,
     pub web_ui_url: String,
 }
@@ -33,7 +32,9 @@ pub struct ToEncrypt {
     files: BTreeSet<PathBuf>,
     schema: Schema,
     password: Option<String>,
-    params: Params,
+    params: Urls,
+    max_days: Option<usize>,
+    max_view: Option<i32>,
 }
 
 impl ToEncrypt {
@@ -42,7 +43,9 @@ impl ToEncrypt {
         files: BTreeSet<PathBuf>,
         schema: Schema,
         password: Option<String>,
-        params: Params,
+        params: Urls,
+        max_days: Option<usize>,
+        max_view: Option<i32>,
     ) -> Self {
         Self {
             text,
@@ -50,6 +53,8 @@ impl ToEncrypt {
             schema,
             password,
             params,
+            max_days,
+            max_view,
         }
     }
 
@@ -100,13 +105,36 @@ impl ToEncrypt {
             }
         };
 
-        if blob.len() > self.params.max_size {
-            return Err(anyhow!(
-                "The secret is too large to be sent. Try breaking it up. Max limit is {} bytes.",
-                self.params.max_size
-            ));
-        }
+        let expires_at = self
+            .max_days
+            .map(|days| Utc::now().naive_utc() + Days::new(days as u64));
 
-        Ok(String::from("https://link.com"))
+        let max_views = self.max_view;
+
+        let secret_request = CreateSecretRequest {
+            ciphertext: blob,
+            expires_at,
+            max_views,
+        };
+
+        let response: SecretId = reqwest::blocking::Client::new()
+            .post(self.params.server_url)
+            .json(&secret_request)
+            .send()
+            .context("Failed to send the request")?
+            .error_for_status()
+            .context("Failed to send the request")?
+            .json()
+            .context("Failed to parse the response")?;
+
+        let secret_link = if let Schema::Password = self.schema {
+            format!("{}/{}", self.params.web_ui_url, response.0)
+        } else {
+            let key_b64 = URL_SAFE.encode(key.unwrap());
+
+            format!("{}/{}#{key_b64}", self.params.web_ui_url, response.0)
+        };
+
+        Ok(secret_link)
     }
 }
