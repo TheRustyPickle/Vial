@@ -1,4 +1,5 @@
 use gpui::*;
+use gpui_component::alert::Alert;
 use gpui_component::button::{Button, ButtonVariants};
 use gpui_component::clipboard::Clipboard;
 use gpui_component::group_box::{GroupBox, GroupBoxVariants};
@@ -6,6 +7,7 @@ use gpui_component::input::{
     Input, InputEvent, InputState, NumberInput, NumberInputEvent, StepAction,
 };
 use gpui_component::label::Label;
+use gpui_component::notification::{Notification, NotificationType};
 use gpui_component::progress::Progress;
 use gpui_component::radio::{Radio, RadioGroup};
 use gpui_component::scroll::ScrollableElement;
@@ -17,7 +19,9 @@ use rfd::FileDialog;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::time::Duration;
-use vial_shared::config::{Config, DEFAULT_SERVER_URL, DEFAULT_WEB_URL, MAX_DAY_COUNT, MAX_SIZE};
+use vial_shared::config::{
+    Config, DEFAULT_SERVER_URL, DEFAULT_WEB_URL, MAX_DAY_COUNT, MAX_SIZE, MAX_VIEW_COUNT,
+};
 
 use crate::crypto::{Params, Schema, ToEncrypt};
 
@@ -91,12 +95,12 @@ impl SendView {
 
         let password = cx.new(|_| None);
 
-        cx.observe(&password, |this, state, cx| {
+        cx.observe_in(&password, window, |this, state, window, cx| {
             let value = state.read(cx);
 
             if value.is_some() {
                 this.loading = true;
-                this.start_encryption(cx);
+                this.start_encryption(window, cx);
             }
         })
         .detach();
@@ -253,14 +257,16 @@ impl SendView {
                     })
             });
         } else {
-            self.start_encryption(cx);
+            self.start_encryption(window, cx);
         }
     }
 
-    fn start_encryption(&mut self, cx: &mut Context<Self>) {
+    fn start_encryption(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let text = self.to_encrypt.read(cx).value().to_string();
         let files = self.files.clone();
         let schema = Schema::from_index(self.schema_index);
+
+        self.loading = true;
 
         let password = if let Schema::Password = schema {
             self.password.read(cx).clone()
@@ -278,18 +284,33 @@ impl SendView {
             ToEncrypt::new(text, files, schema, password, params).create_secret()
         });
 
-        cx.spawn(async |this, cx| {
+        cx.spawn_in(window, async |this, cx| {
             let result = encrypt_task.await;
 
-            let result = this.update(cx, |this, cx| {
-                this.secret_url = result.unwrap();
-                this.loading = false;
-                cx.notify();
-            });
+            if let Err(e) = result {
+                if let Err(e) = cx.window_handle().update(cx, |_, window, cx| {
+                    let notification =
+                        Notification::error(format!("Error: {e:#}")).title("Encryption Failed");
+                    window.push_notification(notification, cx);
+                }) {
+                    println!("Failed to create notification. Error: {}", e);
+                };
 
-            if let Err(err) = result {
-                println!("Error: {}", err);
+                return;
             }
+
+            if let Err(e) = cx.window_handle().update(cx, |_, window, cx| {
+                if let Err(e) = this.update(cx, |this, cx| {
+                    this.secret_url = result.unwrap();
+                    this.reset_all_states(cx, window);
+
+                    cx.notify();
+                }) {
+                    println!("Error while updating: {e}")
+                };
+            }) {
+                println!("Error while updating: {e}")
+            };
         })
         .detach();
     }
@@ -429,8 +450,8 @@ impl SendView {
 
     fn show_limitations(
         &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
+        _window: &mut Window,
+        _cx: &mut Context<Self>,
     ) -> impl IntoElement {
         h_flex()
             .size_full()
@@ -500,6 +521,14 @@ impl SendView {
         }
     }
 
+    fn max_view_count(&self) -> usize {
+        if let Some(max_view_count) = self.config.max_views {
+            max_view_count
+        } else {
+            MAX_VIEW_COUNT
+        }
+    }
+
     fn server_url(&self) -> String {
         self.config
             .server_url
@@ -530,11 +559,37 @@ impl SendView {
             format!("{kb:.2} KB")
         }
     }
+
+    fn is_submit_disabled(&self, cx: &mut Context<Self>) -> bool {
+        let Ok(max_day) = self.max_day_count_state.read(cx).value().parse::<usize>() else {
+            return false;
+        };
+
+        let Ok(max_view) = self.max_view_state.read(cx).value().parse::<usize>() else {
+            return false;
+        };
+
+        self.full_size == 0
+            || self.full_size > self.max_size() as u64
+            || max_day > self.max_day_count()
+            || max_view > self.max_view_count()
+            || max_day == 0 && max_view == 0
+    }
+
+    fn reset_all_states(&mut self, cx: &mut Context<Self>, window: &mut Window) {
+        self.loading = false;
+
+        self.to_encrypt.update(cx, |input, cx| {
+            input.set_value(String::new(), window, cx);
+        });
+
+        self.files.clear();
+        self.update_progress(cx);
+    }
 }
 
 impl Render for SendView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let dialog_layer = Root::render_dialog_layer(window, cx);
         self.sync_secret_url(window, cx);
 
         v_flex()
@@ -593,7 +648,7 @@ impl Render for SendView {
                 h_flex().justify_center().items_center().pt_6().child(
                     Button::new("Submit")
                         .label("Submit")
-                        .disabled(self.full_size == 0 || self.full_size > self.max_size() as u64)
+                        .disabled(self.is_submit_disabled(cx))
                         .primary()
                         .loading(self.loading)
                         .w_2_5()
@@ -601,6 +656,5 @@ impl Render for SendView {
                 ),
             )
             .child(self.show_url_input(window, cx))
-            .children(dialog_layer)
     }
 }

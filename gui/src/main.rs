@@ -1,5 +1,5 @@
-mod send;
 mod crypto;
+mod send;
 
 use gpui::*;
 use gpui_component::tab::{Tab, TabBar};
@@ -61,6 +61,9 @@ impl Render for MainWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let active_tab_index = self.active_tab as usize;
 
+        let dialog_layer = Root::render_dialog_layer(window, cx);
+        let notification_layer = Root::render_notification_layer(window, cx);
+
         v_flex()
             .size_full()
             .items_center()
@@ -87,6 +90,8 @@ impl Render for MainWindow {
                     ),
             )
             .child(v_flex().h_full().w_4_5().child(self.render_tab(window, cx)))
+            .children(dialog_layer)
+            .children(notification_layer)
     }
 }
 
