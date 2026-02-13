@@ -7723,10 +7723,13 @@ name = "vial-gui"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "base64",
+ "chrono",
  "gpui",
  "gpui-component",
  "gpui-component-assets",
  "regex",
+ "reqwest",
  "rfd",
  "vial-core",
  "vial-shared",

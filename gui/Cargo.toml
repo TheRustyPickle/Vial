@@ -14,10 +14,13 @@ categories = ["GUI"]
 
 [dependencies]
 anyhow.workspace = true
+base64.workspace = true
+chrono.workspace = true
 gpui = "0.2.2"
 gpui-component = "0.5.1"
 gpui-component-assets = "0.5.1"
+regex = "1.12.2"
+reqwest.workspace = true
 rfd = "0.17.2"
 vial-core.workspace = true
 vial-shared = { workspace = true, features = ["config"] }
-regex = "1.12.2"
