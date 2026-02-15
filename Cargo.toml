@@ -6,7 +6,7 @@ members = ["cli", "core", "gui", "server", "shared", "srv-lib"]
 anyhow = "1.0.100"
 base64 = "0.22.1"
 chrono = { version = "0.4.42", features = ["serde"] }
-reqwest = { version = "0.13.1", features = ["json", "blocking"] }
+reqwest = { version = "0.13.1", features = ["blocking", "json"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 tokio = { version = "1.49.0", features = ["macros", "rt-multi-thread"] }
