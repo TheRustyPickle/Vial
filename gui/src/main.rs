@@ -35,7 +35,7 @@ struct MainWindow {
 
 impl MainWindow {
     fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let config = Config::get_config().unwrap_or_default();
+        let config = Config::get_config();
         let send_entity = cx.new(|cx| SendView::new(config, window, cx));
 
         Self {

@@ -18,9 +18,7 @@ use rfd::FileDialog;
 use std::collections::BTreeSet;
 use std::path::PathBuf;
 use std::time::Duration;
-use vial_shared::config::{
-    Config, DEFAULT_SERVER_URL, DEFAULT_WEB_URL, MAX_DAY_COUNT, MAX_SIZE, MAX_VIEW_COUNT,
-};
+use vial_shared::config::Config;
 
 use crate::crypto::{Schema, ToEncrypt, Urls};
 
@@ -210,7 +208,7 @@ impl SendView {
 
         self.file_size = total_size_files;
 
-        let progress = self.full_size as f32 / MAX_SIZE as f32;
+        let progress = self.full_size as f32 / self.config.get_max_views_verified() as f32;
 
         self.progress = progress * 100.0;
     }
@@ -279,8 +277,8 @@ impl SendView {
         };
 
         let params = Urls {
-            server_url: self.server_url(),
-            web_ui_url: self.web_ui_url(),
+            server_url: self.config.get_server_url(),
+            web_ui_url: self.config.get_web_ui_url(),
         };
 
         let Ok(max_days) = self.max_day_count_state.read(cx).value().parse::<usize>() else {
@@ -526,47 +524,6 @@ impl SendView {
             )
     }
 
-    fn max_size(&self) -> usize {
-        if let Some(max_size) = self.config.max_size
-            && let Some(url) = &self.config.server_url
-            && url != DEFAULT_SERVER_URL
-        {
-            max_size
-        } else {
-            MAX_SIZE
-        }
-    }
-
-    fn max_day_count(&self) -> usize {
-        if let Some(max_day_count) = self.config.max_days {
-            max_day_count
-        } else {
-            MAX_DAY_COUNT
-        }
-    }
-
-    fn max_view_count(&self) -> usize {
-        if let Some(max_view_count) = self.config.max_views {
-            max_view_count
-        } else {
-            MAX_VIEW_COUNT
-        }
-    }
-
-    fn server_url(&self) -> String {
-        self.config
-            .server_url
-            .clone()
-            .unwrap_or_else(|| DEFAULT_SERVER_URL.to_string())
-    }
-
-    fn web_ui_url(&self) -> String {
-        self.config
-            .web_ui_url
-            .clone()
-            .unwrap_or_else(|| DEFAULT_WEB_URL.to_string())
-    }
-
     fn byte_size_to_readable(&self, len: f64) -> String {
         let kb = len / 1024.0;
 
@@ -594,9 +551,9 @@ impl SendView {
         };
 
         self.full_size == 0
-            || self.full_size > self.max_size() as u64
-            || max_day > self.max_day_count()
-            || max_view > self.max_view_count()
+            || self.full_size > self.config.get_max_views_verified() as u64
+            || max_day > self.config.get_max_days_verified()
+            || max_view > self.config.get_max_views_verified()
             || max_day == 0 && max_view == 0
             || self.loading
     }
@@ -662,7 +619,7 @@ impl Render for SendView {
                         Label::new(format!(
                             "{} of {} used",
                             self.byte_size_to_readable(self.full_size as f64),
-                            self.byte_size_to_readable(self.max_size() as f64)
+                            self.byte_size_to_readable(self.config.get_max_views_verified() as f64)
                         ))
                         .font_semibold(),
                     ),

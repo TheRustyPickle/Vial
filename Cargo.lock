@@ -7739,6 +7739,7 @@ name = "vial-server"
 version = "0.1.0"
 dependencies = [
  "actix-web",
+ "chrono",
  "dotenvy",
  "log",
  "pretty_env_logger",

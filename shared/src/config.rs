@@ -1,6 +1,7 @@
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use dirs::config_dir;
 use serde::{Deserialize, Serialize};
+use std::env::var;
 use std::fs::{File, create_dir_all, read};
 use std::path::PathBuf;
 
@@ -20,28 +21,118 @@ pub struct Config {
     pub web_ui_url: Option<String>,
     pub max_views: Option<usize>,
     pub max_days: Option<usize>,
+    pub database_url: Option<String>,
+    pub port: Option<u16>,
+    pub address: Option<String>,
 }
 
 impl Config {
-    pub fn get_config() -> Result<Self> {
-        let mut target_path = config_dir().unwrap();
+    pub fn get_config() -> Self {
+        let result = || -> Result<Config> {
+            let mut target_path = config_dir().ok_or(anyhow!("Failed to get config dir"))?;
 
-        target_path.push("Vial");
+            target_path.push("Vial");
 
-        create_dir_all(&target_path)?;
+            create_dir_all(&target_path)?;
 
-        target_path.push("vial.json");
+            target_path.push("vial.json");
+            if target_path.exists() {
+                let contents = read(target_path)?;
+                Ok(serde_json::from_slice(&contents)?)
+            } else {
+                let config = Config::default();
 
-        if target_path.exists() {
-            let contents = read(target_path)?;
-            Ok(serde_json::from_slice(&contents)?)
-        } else {
-            let config = Config::default();
+                config.save_config()?;
 
-            config.save_config()?;
+                Ok(config)
+            }
+        };
 
-            Ok(config)
-        }
+        result().unwrap_or_default()
+    }
+
+    pub fn get_server_url(&self) -> String {
+        var("SERVER_URL").unwrap_or(
+            self.server_url
+                .clone()
+                .unwrap_or(DEFAULT_SERVER_URL.to_string()),
+        )
+    }
+
+    pub fn get_web_ui_url(&self) -> String {
+        var("WEB_URL").unwrap_or(
+            self.server_url
+                .clone()
+                .unwrap_or(DEFAULT_WEB_URL.to_string()),
+        )
+    }
+
+    pub fn get_max_size(&self) -> usize {
+        self.max_size.unwrap_or(MAX_SIZE)
+    }
+
+    pub fn get_max_size_verified(&self) -> usize {
+        let Ok(max_size) = var("MAX_SIZE") else {
+            if let Some(server_url) = &self.server_url
+                && server_url != DEFAULT_SERVER_URL
+            {
+                return self.get_max_size();
+            } else {
+                return MAX_SIZE;
+            }
+        };
+
+        max_size.parse().unwrap_or(MAX_SIZE)
+    }
+
+    pub fn get_max_views(&self) -> usize {
+        self.max_views.unwrap_or(MAX_VIEW_COUNT)
+    }
+
+    pub fn get_max_views_verified(&self) -> usize {
+        let Ok(max_views) = var("MAX_VIEW") else {
+            if let Some(server_url) = &self.server_url
+                && server_url != DEFAULT_SERVER_URL
+            {
+                return self.get_max_views();
+            } else {
+                return MAX_VIEW_COUNT;
+            }
+        };
+
+        max_views.parse().unwrap_or(MAX_VIEW_COUNT)
+    }
+
+    pub fn get_max_days(&self) -> usize {
+        self.max_days.unwrap_or(MAX_DAY_COUNT)
+    }
+
+    pub fn get_max_days_verified(&self) -> usize {
+        let Ok(max_days) = var("MAX_DAY") else {
+            if let Some(server_url) = &self.server_url
+                && server_url != DEFAULT_SERVER_URL
+            {
+                return self.get_max_days();
+            } else {
+                return MAX_DAY_COUNT;
+            }
+        };
+
+        max_days.parse().unwrap_or(MAX_DAY_COUNT)
+    }
+
+    pub fn get_database_url(&self) -> String {
+        var("DATABASE_URL").unwrap_or(self.database_url.clone().unwrap())
+    }
+
+    pub fn get_port(&self) -> u16 {
+        var("PORT")
+            .map(|p| p.parse().unwrap())
+            .unwrap_or(self.port.unwrap_or(8080))
+    }
+
+    pub fn get_address(&self) -> String {
+        var("ADDRESS").unwrap_or(self.address.clone().unwrap_or("127.0.0.1".to_string()))
     }
 
     pub fn set_download_path(&mut self, path: PathBuf) -> Result<()> {

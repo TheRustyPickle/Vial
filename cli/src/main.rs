@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use vial_core::crypto::{
     decrypt_with_password, decrypt_with_random_key, encrypt_with_password, encrypt_with_random_key,
 };
-use vial_shared::config::{Config, DEFAULT_SERVER_URL, DEFAULT_WEB_URL, MAX_SIZE};
+use vial_shared::config::Config;
 use vial_shared::{
     CreateSecretRequest, EncryptedPayload, FullSecretV1, Payload, SecretFile, SecretFileV1,
     SecretId, sanitize_filename,
@@ -215,9 +215,7 @@ fn send(
         expires_at = Some(Utc::now().naive_utc() + Days::new(expire as u64));
     }
 
-    let config = Config::get_config()
-        .context("Failed to read config")
-        .unwrap_or_default();
+    let config = Config::get_config();
 
     let mut files = Vec::with_capacity(attachments.len());
 
@@ -257,26 +255,11 @@ fn send(
     };
 
     // Only accept the size in the config if a different server is used than the default one
-    let max_size = if let Some(max_size) = config.max_size
-        && let Some(url) = &config.server_url
-        && url != DEFAULT_SERVER_URL
-    {
-        max_size
-    } else {
-        MAX_SIZE
-    };
+    let max_size = config.get_max_size_verified();
 
-    let post_url = if let Some(url) = config.server_url {
-        url
-    } else {
-        DEFAULT_SERVER_URL.to_string()
-    };
+    let post_url = config.get_server_url();
 
-    let web_ui_url = if let Some(url) = config.web_ui_url {
-        url
-    } else {
-        DEFAULT_WEB_URL.to_string()
-    };
+    let web_ui_url = config.get_web_ui_url();
 
     if blob.len() > max_size {
         return Err(anyhow!(
@@ -313,15 +296,9 @@ fn receive(source: String, password: bool, random_key: bool) -> Result<()> {
         return Err(anyhow!("Could not find the secret id in the secret link."));
     };
 
-    let config = Config::get_config()
-        .context("Failed to read config")
-        .unwrap_or_default();
+    let config = Config::get_config();
 
-    let post_url = if let Some(url) = config.server_url {
-        url
-    } else {
-        DEFAULT_SERVER_URL.to_string()
-    };
+    let post_url = config.get_server_url();
 
     let key = secret_id.split_once('#');
 
@@ -365,7 +342,7 @@ fn receive(source: String, password: bool, random_key: bool) -> Result<()> {
 }
 
 fn config(args: ConfigArgs) -> Result<()> {
-    let mut config = Config::get_config().context("Failed to get config")?;
+    let mut config = Config::get_config();
 
     if let Some(dl_path) = args.set_download_path {
         config

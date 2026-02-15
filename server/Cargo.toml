@@ -18,9 +18,10 @@ path = "src/main.rs"
 
 [dependencies]
 actix-web = "4.12.1"
+chrono.workspace = true
 dotenvy = "0.15.7"
 log = "0.4.29"
 pretty_env_logger = "0.5.0"
 tokio.workspace = true
-vial-shared.workspace = true
+vial-shared = { workspace = true, features = ["config"] }
 vial-srv.workspace = true
