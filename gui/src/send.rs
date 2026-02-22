@@ -208,7 +208,7 @@ impl SendView {
 
         self.file_size = total_size_files;
 
-        let progress = self.full_size as f32 / self.config.get_max_views_verified() as f32;
+        let progress = self.full_size as f32 / self.config.get_max_size_verified() as f32;
 
         self.progress = progress * 100.0;
     }
@@ -430,8 +430,6 @@ impl SendView {
                         .child(
                             v_flex().w(px(current_w)).max_w_full().child(
                                 Input::new(&url_state)
-                                    .border_2()
-                                    .rounded_lg()
                                     .suffix(Clipboard::new("clipboard").value(url.clone())),
                             ),
                         )
@@ -551,7 +549,7 @@ impl SendView {
         };
 
         self.full_size == 0
-            || self.full_size > self.config.get_max_views_verified() as u64
+            || self.full_size > self.config.get_max_size_verified() as u64
             || max_day > self.config.get_max_days_verified()
             || max_view > self.config.get_max_views_verified()
             || max_day == 0 && max_view == 0
@@ -577,12 +575,7 @@ impl Render for SendView {
         v_flex()
             .gap_2()
             .h_full()
-            .child(
-                Input::new(&self.to_encrypt)
-                    .border_2()
-                    .rounded_lg()
-                    .border_color(cx.theme().border),
-            )
+            .child(Input::new(&self.to_encrypt))
             .child(
                 GroupBox::new().outline().child(
                     v_flex()
@@ -619,13 +612,19 @@ impl Render for SendView {
                         Label::new(format!(
                             "{} of {} used",
                             self.byte_size_to_readable(self.full_size as f64),
-                            self.byte_size_to_readable(self.config.get_max_views_verified() as f64)
+                            self.byte_size_to_readable(self.config.get_max_size_verified() as f64)
                         ))
                         .font_semibold(),
                     ),
             )
             .child(div().py_2().child(self.show_limitations(window, cx)))
-            .child(div().py_2().child(self.show_schema_choice(window, cx)))
+            .child(
+                v_flex()
+                    .py_2()
+                    .justify_center()
+                    .items_center()
+                    .child(self.show_schema_choice(window, cx)),
+            )
             .child(
                 h_flex().justify_center().items_center().pt_6().child(
                     Button::new("Submit")
