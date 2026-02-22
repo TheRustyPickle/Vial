@@ -296,6 +296,10 @@ fn receive(source: String, password: bool, random_key: bool) -> Result<()> {
         return Err(anyhow!("Could not find the secret id in the secret link."));
     };
 
+    if secret_id.is_empty() || secret_id.contains(' ') {
+        return Err(anyhow!("Could not find the secret id in the secret link."));
+    }
+
     let config = Config::get_config();
 
     let post_url = config.get_server_url();
