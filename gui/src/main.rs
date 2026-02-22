@@ -1,4 +1,5 @@
 mod crypto;
+mod recv;
 mod send;
 
 use gpui::*;
@@ -7,6 +8,7 @@ use gpui_component::{Root, Theme, h_flex, v_flex};
 use gpui_component_assets::Assets;
 use vial_shared::config::Config;
 
+use crate::recv::ReceiveView;
 use crate::send::SendView;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -31,16 +33,19 @@ impl MainTab {
 struct MainWindow {
     active_tab: MainTab,
     send_view: Entity<SendView>,
+    recv_view: Entity<ReceiveView>,
 }
 
 impl MainWindow {
     fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let config = Config::get_config();
-        let send_entity = cx.new(|cx| SendView::new(config, window, cx));
+        let send_entity = cx.new(|cx| SendView::new(config.clone(), window, cx));
+        let recv_entity = cx.new(|cx| ReceiveView::new(config, window, cx));
 
         Self {
             active_tab: MainTab::default(),
             send_view: send_entity,
+            recv_view: recv_entity,
         }
     }
 
@@ -52,6 +57,7 @@ impl MainWindow {
     fn render_tab(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         match self.active_tab {
             MainTab::Send => v_flex().size_full().child(self.send_view.clone()),
+            MainTab::Receive => v_flex().size_full().child(self.recv_view.clone()),
             _ => div().child(self.send_view.clone()),
         }
     }
