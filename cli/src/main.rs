@@ -302,20 +302,20 @@ fn receive(source: String, password: bool, random_key: bool) -> Result<()> {
 
     let config = Config::get_config();
 
-    let post_url = config.get_server_url();
+    let server_url = config.get_server_url();
 
     let key = secret_id.split_once('#');
 
     let client = reqwest::blocking::Client::new();
 
     let decrypted = if let Some((id, key)) = key {
-        let payload: EncryptedPayload = reqwest_json(client.get(format!("{post_url}/{id}")))
+        let payload: EncryptedPayload = reqwest_json(client.get(format!("{server_url}/{id}")))
             .context("Failed to fetch the secret")?;
 
         decrypt_random_key(key, &payload.payload)
             .context("Failed to decrypt using random key schema")?
     } else {
-        let payload: EncryptedPayload = reqwest_json(client.get(format!("{post_url}/{secret_id}")))
+        let payload: EncryptedPayload = reqwest_json(client.get(format!("{server_url}/{secret_id}")))
             .context("Failed to fetch the secret")?;
 
         let key = rpassword::prompt_password("Enter key/password: ")
