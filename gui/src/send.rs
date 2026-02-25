@@ -11,7 +11,7 @@ use gpui_component::progress::Progress;
 use gpui_component::radio::{Radio, RadioGroup};
 use gpui_component::scroll::ScrollableElement;
 use gpui_component::tooltip::Tooltip;
-use gpui_component::{ActiveTheme as _, Disableable, PixelsExt, StyledExt, WindowExt};
+use gpui_component::{Disableable, PixelsExt, StyledExt, WindowExt};
 use gpui_component::{IconName, h_flex, v_flex};
 use regex::Regex;
 use rfd::FileDialog;
@@ -20,7 +20,7 @@ use std::path::PathBuf;
 use std::time::Duration;
 use vial_shared::config::Config;
 
-use crate::crypto::{Schema, ToEncrypt, Urls};
+use crate::crypto::{Commons, Schema, ToEncrypt};
 
 #[derive(Clone)]
 pub struct SendView {
@@ -276,9 +276,10 @@ impl SendView {
             None
         };
 
-        let params = Urls {
+        let params = Commons {
             server_url: self.config.get_server_url(),
             web_ui_url: self.config.get_web_ui_url(),
+            schema,
         };
 
         let Ok(max_days) = self.max_day_count_state.read(cx).value().parse::<usize>() else {
@@ -294,8 +295,7 @@ impl SendView {
         let max_view = if max_view == 0 { None } else { Some(max_view) };
 
         let encrypt_task = cx.background_spawn(async move {
-            ToEncrypt::new(text, files, schema, password, params, max_days, max_view)
-                .create_secret()
+            ToEncrypt::new(text, files, password, params, max_days, max_view).create_secret()
         });
 
         cx.spawn_in(window, async |this, cx| {

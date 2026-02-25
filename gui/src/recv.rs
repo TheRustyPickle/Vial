@@ -1,34 +1,25 @@
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::button::{Button, ButtonVariants};
-use gpui_component::clipboard::Clipboard;
-use gpui_component::group_box::{GroupBox, GroupBoxVariants};
-use gpui_component::input::{
-    Input, InputEvent, InputState, NumberInput, NumberInputEvent, StepAction,
-};
+use gpui_component::input::{Input, InputState};
 use gpui_component::label::Label;
 use gpui_component::notification::Notification;
 use gpui_component::radio::{Radio, RadioGroup};
-use gpui_component::scroll::ScrollableElement;
 use gpui_component::tooltip::Tooltip;
-use gpui_component::{ActiveTheme as _, Disableable, PixelsExt, StyledExt, WindowExt};
+use gpui_component::{Disableable, WindowExt};
 use gpui_component::{IconName, h_flex, v_flex};
-use regex::Regex;
-use rfd::FileDialog;
-use std::collections::BTreeSet;
-use std::path::PathBuf;
-use std::time::Duration;
 use vial_shared::FullSecret;
 use vial_shared::config::Config;
 
-use crate::crypto::{Schema, ToEncrypt, Urls};
+use crate::crypto::{Commons, Schema, ToDecrypt};
 
 pub struct ReceiveView {
     config: Config,
     url_state: Entity<InputState>,
     key_state: Entity<InputState>,
+    // (id, key)
     decrypt_key: Entity<Option<(String, String)>>,
-    decrypted_state: Entity<Option<FullSecret>>,
+    decrypted_state: Option<FullSecret>,
     schema_index: usize,
     loading: bool,
 }
@@ -48,7 +39,6 @@ impl ReceiveView {
                 .multi_line(false)
         });
 
-        let decrypted_state = cx.new(|_| None);
         let decrypt_key = cx.new(|_| None);
 
         cx.observe_in(&decrypt_key, window, |this, state, window, cx| {
@@ -56,7 +46,7 @@ impl ReceiveView {
 
             if value.is_some() {
                 this.loading = true;
-                println!("Decrypting secret");
+                this.start_decrypt(window, cx);
             }
         })
         .detach();
@@ -66,7 +56,7 @@ impl ReceiveView {
             url_state,
             key_state,
             decrypt_key,
-            decrypted_state,
+            decrypted_state: None,
             loading: false,
             schema_index: 0,
         }
@@ -114,8 +104,6 @@ impl ReceiveView {
             show_error();
             return;
         }
-
-        println!("Secret ID: {}", secret_id);
 
         let key = secret_id.split_once('#');
 
@@ -168,6 +156,71 @@ impl ReceiveView {
                     })
             });
         }
+    }
+
+    fn start_decrypt(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let decrypt_key = self.decrypt_key.read(cx);
+        let Some((id, key)) = decrypt_key else {
+            self.loading = false;
+            return;
+        };
+
+        let id = id.to_string();
+        let key = key.to_string();
+
+        self.loading = true;
+
+        let schema = Schema::from_index(self.schema_index);
+
+        let params = Commons {
+            server_url: self.config.get_server_url(),
+            web_ui_url: self.config.get_web_ui_url(),
+            schema,
+        };
+
+        let decrypt_task =
+            cx.background_spawn(async move { ToDecrypt::new(id, key, params).decrypt_secret() });
+
+        cx.spawn_in(window, async |this, cx| {
+            let result = decrypt_task.await;
+
+            if let Err(e) = result {
+                if let Err(e) = cx.window_handle().update(cx, |_, window, cx| {
+                    let notification =
+                        Notification::error(format!("Error: {e:#}")).title("Decryption Failed");
+                    window.push_notification(notification, cx);
+
+                    if let Err(e) = this.update(cx, |this, cx| {
+                        this.loading = false;
+
+                        cx.notify();
+                    }) {
+                        println!("Error while updating: {e}")
+                    };
+                }) {
+                    println!("Failed to create notification. Error: {}", e);
+                };
+
+                return;
+            }
+
+            if let Err(e) = cx.window_handle().update(cx, |_, window, cx| {
+                if let Err(e) = this.update(cx, |this, cx| {
+                    this.decrypted_state = Some(result.unwrap());
+                    this.loading = false;
+                    this.url_state.update(cx, |state, cx| {
+                        state.set_value(String::new(), window, cx);
+                    });
+
+                    cx.notify();
+                }) {
+                    println!("Error while updating: {e}")
+                };
+            }) {
+                println!("Error while updating: {e}")
+            };
+        })
+        .detach();
     }
 
     fn decrypt_url_input(&mut self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -224,10 +277,10 @@ impl Render for ReceiveView {
         v_flex()
             .gap_2()
             .h_full()
-            .when(self.decrypted_state.read(cx).is_some(), |div| {
+            .when(self.decrypted_state.is_some(), |div| {
                 div.child(Label::new("Decrypted content"))
             })
-            .when(self.decrypted_state.read(cx).is_none(), |d| {
+            .when(self.decrypted_state.is_none(), |d| {
                 d.size_full().child(
                     v_flex()
                         .size_full()
@@ -252,6 +305,7 @@ impl Render for ReceiveView {
                                 .label("Submit")
                                 .primary()
                                 .loading(self.loading)
+                                .disabled(self.loading)
                                 .w_2_5()
                                 .on_click(cx.listener(Self::submit)),
                         ),
