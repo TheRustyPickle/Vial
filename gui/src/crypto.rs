@@ -14,15 +14,15 @@ use vial_shared::{
 
 #[derive(Clone, Copy)]
 pub enum Schema {
-    Random,
     Password,
+    Random,
 }
 
 impl Schema {
     pub fn from_index(index: usize) -> Self {
         match index {
-            0 => Self::Random,
-            1 => Self::Password,
+            0 => Self::Password,
+            1 => Self::Random,
             _ => unreachable!(),
         }
     }

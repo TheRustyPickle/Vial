@@ -21,6 +21,7 @@ use std::time::Duration;
 use vial_shared::config::Config;
 
 use crate::crypto::{Commons, Schema, ToEncrypt};
+use crate::utils::byte_size_to_readable;
 
 #[derive(Clone)]
 pub struct SendView {
@@ -78,6 +79,44 @@ impl SendView {
 
         cx.subscribe_in(&max_view_state, window, |view, state, event, window, cx| {
             view.handle_incre_decre(window, state, cx, event);
+
+            let current_value = state.read(cx).value();
+
+            if current_value.is_empty() {
+                state.update(cx, |state, cx| {
+                    state.set_value("0", window, cx);
+                });
+            }
+        })
+        .detach();
+
+        cx.subscribe_in(&max_view_state, window, {
+            move |_, state, ev: &InputEvent, window, cx| {
+                if let InputEvent::Change = ev {
+                    let current_value = state.read(cx).value();
+
+                    if current_value.is_empty() {
+                        state.update(cx, |state, cx| {
+                            state.set_value("0", window, cx);
+                        });
+                    }
+                }
+            }
+        })
+        .detach();
+
+        cx.subscribe_in(&max_day_count_state, window, {
+            move |_, state, ev: &InputEvent, window, cx| {
+                if let InputEvent::Change = ev {
+                    let current_value = state.read(cx).value();
+
+                    if current_value.is_empty() {
+                        state.update(cx, |state, cx| {
+                            state.set_value("0", window, cx);
+                        });
+                    }
+                }
+            }
         })
         .detach();
 
@@ -86,6 +125,14 @@ impl SendView {
             window,
             |view, state, event, window, cx| {
                 view.handle_incre_decre(window, state, cx, event);
+
+                let current_value = state.read(cx).value();
+
+                if current_value.is_empty() {
+                    state.update(cx, |state, cx| {
+                        state.set_value("0", window, cx);
+                    });
+                }
             },
         )
         .detach();
@@ -368,8 +415,7 @@ impl SendView {
                 .map(|n| n.to_string_lossy().to_string())
                 .unwrap_or_else(|| "Unknown file".into());
 
-            let size =
-                self.byte_size_to_readable(path.metadata().map(|m| m.len()).unwrap_or(0) as f64);
+            let size = byte_size_to_readable(path.metadata().map(|m| m.len()).unwrap_or(0) as f64);
 
             let path = path.clone();
 
@@ -460,7 +506,7 @@ impl SendView {
                 });
 
         RadioGroup::horizontal("options")
-            .children([random_radio, password_radio])
+            .children([password_radio, random_radio])
             .selected_index(Some(self.schema_index))
             .on_click(cx.listener(|view, selected_index: &usize, _, cx| {
                 view.schema_index = *selected_index;
@@ -520,23 +566,6 @@ impl SendView {
                         ),
                 ),
             )
-    }
-
-    fn byte_size_to_readable(&self, len: f64) -> String {
-        let kb = len / 1024.0;
-
-        if kb > 1024.0 {
-            let mb = kb / 1024.0;
-
-            if mb > 1024.0 {
-                let gb = mb / 1024.0;
-                format!("{gb:.2} GB")
-            } else {
-                format!("{mb:.2} MB")
-            }
-        } else {
-            format!("{kb:.2} KB")
-        }
     }
 
     fn is_submit_disabled(&self, cx: &mut Context<Self>) -> bool {
@@ -611,8 +640,8 @@ impl Render for SendView {
                     .child(
                         Label::new(format!(
                             "{} of {} used",
-                            self.byte_size_to_readable(self.full_size as f64),
-                            self.byte_size_to_readable(self.config.get_max_size_verified() as f64)
+                            byte_size_to_readable(self.full_size as f64),
+                            byte_size_to_readable(self.config.get_max_size_verified() as f64)
                         ))
                         .font_semibold(),
                     ),

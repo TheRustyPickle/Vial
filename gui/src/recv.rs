@@ -1,17 +1,23 @@
+use anyhow::{Context as _, Result, anyhow};
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::button::{Button, ButtonVariants};
-use gpui_component::input::{Input, InputState};
-use gpui_component::label::Label;
+use gpui_component::group_box::{GroupBox, GroupBoxVariants};
+use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::notification::Notification;
 use gpui_component::radio::{Radio, RadioGroup};
+use gpui_component::scroll::ScrollableElement;
 use gpui_component::tooltip::Tooltip;
-use gpui_component::{Disableable, WindowExt};
+use gpui_component::{Disableable, StyledExt, WindowExt};
 use gpui_component::{IconName, h_flex, v_flex};
-use vial_shared::FullSecret;
+use rfd::FileDialog;
+use std::env::set_current_dir;
+use std::path::PathBuf;
 use vial_shared::config::Config;
+use vial_shared::{FullSecret, SecretFile};
 
 use crate::crypto::{Commons, Schema, ToDecrypt};
+use crate::utils::byte_size_to_readable;
 
 pub struct ReceiveView {
     config: Config,
@@ -22,6 +28,8 @@ pub struct ReceiveView {
     decrypted_state: Option<FullSecret>,
     schema_index: usize,
     loading: bool,
+    decrypt_text: Entity<InputState>,
+    download_path: Option<PathBuf>,
 }
 
 impl ReceiveView {
@@ -51,6 +59,23 @@ impl ReceiveView {
         })
         .detach();
 
+        let decrypt_text = cx.new(|cx| {
+            InputState::new(window, cx)
+                .multi_line(true)
+                .soft_wrap(true)
+                .auto_grow(7, 7)
+        });
+
+        cx.subscribe_in(&decrypt_text, window, {
+            move |this, _, ev: &InputEvent, window, cx| {
+                if let InputEvent::Change = ev {
+                    this.sync_decrypt_text(window, cx);
+                    cx.notify()
+                }
+            }
+        })
+        .detach();
+
         Self {
             config,
             url_state,
@@ -59,7 +84,27 @@ impl ReceiveView {
             decrypted_state: None,
             loading: false,
             schema_index: 0,
+            decrypt_text,
+            download_path: None,
         }
+    }
+
+    fn sync_decrypt_text(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let current_state = self.decrypt_text.read(cx).value();
+
+        let Some(secret) = &self.decrypted_state else {
+            return;
+        };
+
+        let text = secret.text.to_string();
+
+        if text == current_state.as_str() {
+            return;
+        }
+
+        self.decrypt_text.update(cx, |state, cx| {
+            state.set_value(text, window, cx);
+        });
     }
 
     fn paste_content(&mut self, _: &ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
@@ -263,22 +308,217 @@ impl ReceiveView {
                 });
 
         RadioGroup::horizontal("options")
-            .children([random_radio, password_radio])
+            .children([password_radio, random_radio])
             .selected_index(Some(self.schema_index))
             .on_click(cx.listener(|view, selected_index: &usize, _, cx| {
                 view.schema_index = *selected_index;
                 cx.notify();
             }))
     }
+
+    fn copy_content(&mut self, _: &ClickEvent, _window: &mut Window, cx: &mut Context<Self>) {
+        let Some(secret) = &self.decrypted_state else {
+            return;
+        };
+
+        let clipboard_item = ClipboardItem::new_string(secret.text.to_string());
+        cx.write_to_clipboard(clipboard_item);
+    }
+
+    fn download_file(&mut self, index: usize, window: &mut Window, cx: &mut Context<Self>) {
+        self.set_download_path();
+
+        let Some(secret) = &self.decrypted_state else {
+            return;
+        };
+
+        let Some(file) = secret.files.get(index) else {
+            return;
+        };
+
+        let result = self.save_file(file);
+
+        if let Err(e) = result {
+            let notification = Notification::error(format!("Failed to save file: {e:#}"))
+                .title("Error saving file");
+            window.push_notification(notification, cx);
+        } else {
+            let notification = Notification::success("File saved successfully");
+            window.push_notification(notification, cx);
+        }
+    }
+
+    fn download_all(&mut self, _: &ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
+        self.set_download_path();
+
+        let Some(secret) = &self.decrypted_state else {
+            return;
+        };
+
+        for file in secret.files.iter() {
+            let result = self.save_file(file);
+
+            if let Err(e) = result {
+                let notification = Notification::error(format!("Failed to save file: {e:#}"))
+                    .title("Error saving file");
+                window.push_notification(notification, cx);
+            }
+        }
+
+        let notification = Notification::success("Files saved successfully");
+        window.push_notification(notification, cx);
+    }
+
+    fn save_file(&self, file: &SecretFile) -> Result<()> {
+        let Some(path) = &self.download_path else {
+            return Err(anyhow!("No download path set"));
+        };
+
+        set_current_dir(path)
+            .with_context(|| format!("Failed to change directory to {}", path.display()))?;
+
+        let path = std::path::Path::new(file.filename());
+
+        // If path exists, try to save the file by adding (x) number, at most 10 times.
+        // If the attempt fails, ask the user to enter a new filename until a valid one is
+        // entered.
+        if path.exists() {
+            for i in 0..10 {
+                let new_file_name = format!("{} ({})", file.filename(), i + 1);
+                let new_path = std::path::Path::new(&new_file_name);
+
+                if !new_path.exists() {
+                    file.write(new_path).map_err(|e| {
+                        anyhow!("Failed to save file at path {}: {e}", new_path.display())
+                    })?;
+
+                    break;
+                }
+            }
+        } else {
+            file.write(path)
+                .map_err(|e| anyhow!("Failed to save file at path {}: {e}", path.display()))?;
+        }
+
+        Ok(())
+    }
+
+    fn set_download_path(&mut self) {
+        if self.download_path.is_some() {
+            return;
+        }
+
+        let Some(config_path) = &self.config.download_path else {
+            let Some(folder) = FileDialog::new().pick_folder() else {
+                return;
+            };
+
+            self.download_path = Some(folder);
+            return;
+        };
+
+        self.download_path = Some(config_path.clone());
+    }
 }
 
 impl Render for ReceiveView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.sync_decrypt_text(window, cx);
+
         v_flex()
             .gap_2()
             .h_full()
-            .when(self.decrypted_state.is_some(), |div| {
-                div.child(Label::new("Decrypted content"))
+            .when(self.decrypted_state.is_some(), |d| {
+                let secret = self.decrypted_state.as_ref().unwrap();
+                let file_count = secret.total_files();
+
+                d.v_flex()
+                    .gap_6()
+                    .h_full()
+                    .child(
+                        v_flex()
+                            .gap_2()
+                            .child(
+                                h_flex()
+                                    .justify_between()
+                                    .items_center()
+                                    .child(div().text_lg().font_semibold().child("Secret Text"))
+                                    .child(
+                                        Button::new("copy")
+                                            .label("Copy")
+                                            .on_click(cx.listener(Self::copy_content)),
+                                    ),
+                            )
+                            .child(Input::new(&self.decrypt_text).h_40()),
+                    )
+                    .when(file_count > 0, |d| {
+                        d.v_flex()
+                            .gap_3()
+                            .child(
+                                h_flex()
+                                    .justify_between()
+                                    .items_center()
+                                    .child(
+                                        div()
+                                            .text_lg()
+                                            .font_semibold()
+                                            .child(format!("Files ({})", file_count)),
+                                    )
+                                    .child(
+                                        Button::new("download_all")
+                                            .label("Download all")
+                                            .primary()
+                                            .on_click(cx.listener(Self::download_all)),
+                                    ),
+                            )
+                            .child(
+                                GroupBox::new().outline().child(
+                                    v_flex()
+                                        .max_h_40()
+                                        .id("files")
+                                        .overflow_y_scrollbar()
+                                        .children(secret.files.iter().enumerate().map(
+                                            |(idx, file)| {
+                                                let filename = file.filename.clone();
+                                                let size = byte_size_to_readable(
+                                                    file.content.len() as f64,
+                                                );
+
+                                                h_flex()
+                                                    .justify_between()
+                                                    .items_center()
+                                                    .py_2()
+                                                    .px_4()
+                                                    .child(
+                                                        h_flex()
+                                                            .gap_2()
+                                                            .child(
+                                                                div()
+                                                                    .font_medium()
+                                                                    .child(filename.clone()),
+                                                            )
+                                                            .child(
+                                                                div()
+                                                                    .text_sm()
+                                                                    .child(format!("({size})",)),
+                                                            ),
+                                                    )
+                                                    .child(
+                                                        Button::new(SharedString::new(format!(
+                                                            "download_{idx}"
+                                                        )))
+                                                        .icon(IconName::ArrowDown)
+                                                        .on_click(cx.listener(
+                                                            move |this, _, window, cx| {
+                                                                this.download_file(idx, window, cx);
+                                                            },
+                                                        )),
+                                                    )
+                                            },
+                                        )),
+                                ),
+                            )
+                    })
             })
             .when(self.decrypted_state.is_none(), |d| {
                 d.size_full().child(

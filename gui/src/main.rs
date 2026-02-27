@@ -1,6 +1,7 @@
 mod crypto;
 mod recv;
 mod send;
+mod utils;
 
 use gpui::*;
 use gpui_component::tab::{Tab, TabBar};
