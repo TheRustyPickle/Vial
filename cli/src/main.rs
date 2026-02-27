@@ -315,8 +315,9 @@ fn receive(source: String, password: bool, random_key: bool) -> Result<()> {
         decrypt_random_key(key, &payload.payload)
             .context("Failed to decrypt using random key schema")?
     } else {
-        let payload: EncryptedPayload = reqwest_json(client.get(format!("{server_url}/{secret_id}")))
-            .context("Failed to fetch the secret")?;
+        let payload: EncryptedPayload =
+            reqwest_json(client.get(format!("{server_url}/{secret_id}")))
+                .context("Failed to fetch the secret")?;
 
         let key = rpassword::prompt_password("Enter key/password: ")
             .context("Failed to read the password")?;
