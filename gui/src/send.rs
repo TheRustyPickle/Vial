@@ -154,7 +154,7 @@ impl SendView {
                 if let InputEvent::Change = ev {
                     this.update_progress(cx);
 
-                    cx.notify()
+                    cx.notify();
                 }
             }
         })
@@ -164,7 +164,7 @@ impl SendView {
             move |this, _, ev: &InputEvent, window, cx| {
                 if let InputEvent::Change = ev {
                     this.sync_secret_url(window, cx);
-                    cx.notify()
+                    cx.notify();
                 }
             }
         })
@@ -285,7 +285,7 @@ impl SendView {
                                     let input_value = input_clone.read(cx).value();
                                     password.update(cx, |state, cx| {
                                         *state = Some(input_value.to_string());
-                                        cx.notify()
+                                        cx.notify();
                                     });
                                     input_clone.update(cx, |state, cx| {
                                         state.set_value(String::new(), window, cx);
@@ -359,11 +359,11 @@ impl SendView {
 
                         cx.notify();
                     }) {
-                        println!("Error while updating: {e}")
-                    };
+                        println!("Error while updating: {e}");
+                    }
                 }) {
-                    println!("Failed to create notification. Error: {}", e);
-                };
+                    println!("Failed to create notification. Error: {e}");
+                }
 
                 return;
             }
@@ -375,11 +375,11 @@ impl SendView {
 
                     cx.notify();
                 }) {
-                    println!("Error while updating: {e}")
-                };
+                    println!("Error while updating: {e}");
+                }
             }) {
-                println!("Error while updating: {e}")
-            };
+                println!("Error while updating: {e}");
+            }
         })
         .detach();
     }
@@ -400,7 +400,7 @@ impl SendView {
         if files_count == 0 {
             div().child(Label::new("No files selected"))
         } else {
-            div().child(Label::new(format!("Files: {}", files_count)))
+            div().child(Label::new(format!("Files: {files_count}")))
         }
     }
 
@@ -410,10 +410,10 @@ impl SendView {
         }
 
         v_flex().children(self.files.iter().enumerate().map(|(ix, path)| {
-            let name = path
-                .file_name()
-                .map(|n| n.to_string_lossy().to_string())
-                .unwrap_or_else(|| "Unknown file".into());
+            let name = path.file_name().map_or_else(
+                || "Unknown file".into(),
+                |n| n.to_string_lossy().to_string(),
+            );
 
             let size = byte_size_to_readable(path.metadata().map(|m| m.len()).unwrap_or(0) as f64);
 
