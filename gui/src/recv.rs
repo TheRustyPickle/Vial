@@ -70,7 +70,7 @@ impl ReceiveView {
             move |this, _, ev: &InputEvent, window, cx| {
                 if let InputEvent::Change = ev {
                     this.sync_decrypt_text(window, cx);
-                    cx.notify()
+                    cx.notify();
                 }
             }
         })
@@ -119,9 +119,9 @@ impl ReceiveView {
         if let ClipboardEntry::String(text) = first_entry {
             self.url_state.update(cx, |state, cx| {
                 let trimmed = text.text().replace('\n', "");
-                state.set_value(trimmed.to_string(), window, cx);
+                state.set_value(trimmed.clone(), window, cx);
             });
-        };
+        }
     }
 
     fn clear_url(&mut self, _: &ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
@@ -155,8 +155,9 @@ impl ReceiveView {
         if let Some((id, key)) = key {
             self.decrypt_key.update(cx, |state, cx| {
                 *state = Some((id.to_string(), key.to_string()));
-                cx.notify()
-            })
+                cx.notify();
+            });
+            self.schema_index = 1;
         } else {
             let input = self.key_state.clone();
             let decrypt_key = self.decrypt_key.clone();
@@ -179,8 +180,8 @@ impl ReceiveView {
                                 move |_, window, cx| {
                                     let input_value = input_clone.read(cx).value();
                                     decrypt_key.update(cx, |state, cx| {
-                                        *state = Some((id.to_string(), input_value.to_string()));
-                                        cx.notify()
+                                        *state = Some((id.clone(), input_value.to_string()));
+                                        cx.notify();
                                     });
                                     input_clone.update(cx, |state, cx| {
                                         state.set_value(String::new(), window, cx);
@@ -210,8 +211,8 @@ impl ReceiveView {
             return;
         };
 
-        let id = id.to_string();
-        let key = key.to_string();
+        let id = id.clone();
+        let key = key.clone();
 
         self.loading = true;
 
@@ -240,11 +241,11 @@ impl ReceiveView {
 
                         cx.notify();
                     }) {
-                        println!("Error while updating: {e}")
-                    };
+                        println!("Error while updating: {e}");
+                    }
                 }) {
-                    println!("Failed to create notification. Error: {}", e);
-                };
+                    println!("Failed to create notification. Error: {e}");
+                }
 
                 return;
             }
@@ -259,11 +260,11 @@ impl ReceiveView {
 
                     cx.notify();
                 }) {
-                    println!("Error while updating: {e}")
-                };
+                    println!("Error while updating: {e}");
+                }
             }) {
-                println!("Error while updating: {e}")
-            };
+                println!("Error while updating: {e}");
+            }
         })
         .detach();
     }
@@ -355,7 +356,7 @@ impl ReceiveView {
             return;
         };
 
-        for file in secret.files.iter() {
+        for file in &secret.files {
             let result = self.save_file(file);
 
             if let Err(e) = result {
@@ -419,6 +420,15 @@ impl ReceiveView {
 
         self.download_path = Some(config_path.clone());
     }
+
+    fn close(&mut self, _: &ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
+        self.decrypted_state = None;
+        self.decrypt_text
+            .update(cx, |this, cx| this.set_value(String::new(), window, cx));
+        self.decrypt_key.update(cx, |this, cx| *this = None);
+        self.url_state
+            .update(cx, |this, cx| this.set_value(String::new(), window, cx));
+    }
 }
 
 impl Render for ReceiveView {
@@ -462,7 +472,7 @@ impl Render for ReceiveView {
                                         div()
                                             .text_lg()
                                             .font_semibold()
-                                            .child(format!("Files ({})", file_count)),
+                                            .child(format!("Files ({file_count})")),
                                     )
                                     .child(
                                         Button::new("download_all")
@@ -488,7 +498,8 @@ impl Render for ReceiveView {
                                                     .justify_between()
                                                     .items_center()
                                                     .py_2()
-                                                    .px_4()
+                                                    .pr_6()
+                                                    .pl_4()
                                                     .child(
                                                         h_flex()
                                                             .gap_2()
@@ -519,6 +530,15 @@ impl Render for ReceiveView {
                                 ),
                             )
                     })
+                    .child(
+                        h_flex().w_full().justify_center().items_center().child(
+                            Button::new("close")
+                                .label("Close")
+                                .primary()
+                                .w_2_5()
+                                .on_click(cx.listener(Self::close)),
+                        ),
+                    )
             })
             .when(self.decrypted_state.is_none(), |d| {
                 d.size_full().child(
