@@ -27,6 +27,7 @@ pub struct Config {
 }
 
 impl Config {
+    #[must_use]
     pub fn get_config() -> Self {
         let result = || -> Result<Config> {
             let mut target_path = config_dir().ok_or(anyhow!("Failed to get config dir"))?;
@@ -51,6 +52,7 @@ impl Config {
         result().unwrap_or_default()
     }
 
+    #[must_use]
     pub fn get_server_url(&self) -> String {
         var("SERVER_URL").unwrap_or(
             self.server_url
@@ -59,6 +61,7 @@ impl Config {
         )
     }
 
+    #[must_use]
     pub fn get_web_ui_url(&self) -> String {
         var("WEB_URL").unwrap_or(
             self.server_url
@@ -67,70 +70,76 @@ impl Config {
         )
     }
 
+    #[must_use]
     pub fn get_max_size(&self) -> usize {
         self.max_size.unwrap_or(MAX_SIZE)
     }
 
+    #[must_use]
     pub fn get_max_size_verified(&self) -> usize {
         let Ok(max_size) = var("MAX_SIZE") else {
             if let Some(server_url) = &self.server_url
                 && server_url != DEFAULT_SERVER_URL
             {
                 return self.get_max_size();
-            } else {
-                return MAX_SIZE;
             }
+            return MAX_SIZE;
         };
 
         max_size.parse().unwrap_or(MAX_SIZE)
     }
 
+    #[must_use]
     pub fn get_max_views(&self) -> usize {
         self.max_views.unwrap_or(MAX_VIEW_COUNT)
     }
 
+    #[must_use]
     pub fn get_max_views_verified(&self) -> usize {
         let Ok(max_views) = var("MAX_VIEW") else {
             if let Some(server_url) = &self.server_url
                 && server_url != DEFAULT_SERVER_URL
             {
                 return self.get_max_views();
-            } else {
-                return MAX_VIEW_COUNT;
             }
+            return MAX_VIEW_COUNT;
         };
 
         max_views.parse().unwrap_or(MAX_VIEW_COUNT)
     }
 
+    #[must_use]
     pub fn get_max_days(&self) -> usize {
         self.max_days.unwrap_or(MAX_DAY_COUNT)
     }
 
+    #[must_use]
     pub fn get_max_days_verified(&self) -> usize {
         let Ok(max_days) = var("MAX_DAY") else {
             if let Some(server_url) = &self.server_url
                 && server_url != DEFAULT_SERVER_URL
             {
                 return self.get_max_days();
-            } else {
-                return MAX_DAY_COUNT;
             }
+            return MAX_DAY_COUNT;
         };
 
         max_days.parse().unwrap_or(MAX_DAY_COUNT)
     }
 
+    #[must_use]
     pub fn get_database_url(&self) -> String {
         var("DATABASE_URL").unwrap_or(self.database_url.clone().unwrap())
     }
 
+    #[must_use]
     pub fn get_port(&self) -> u16 {
         var("PORT")
             .map(|p| p.parse().unwrap())
             .unwrap_or(self.port.unwrap_or(8080))
     }
 
+    #[must_use]
     pub fn get_address(&self) -> String {
         var("ADDRESS").unwrap_or(self.address.clone().unwrap_or("127.0.0.1".to_string()))
     }
