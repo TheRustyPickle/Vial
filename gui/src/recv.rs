@@ -425,7 +425,7 @@ impl ReceiveView {
         self.decrypted_state = None;
         self.decrypt_text
             .update(cx, |this, cx| this.set_value(String::new(), window, cx));
-        self.decrypt_key.update(cx, |this, cx| *this = None);
+        self.decrypt_key.update(cx, |this, _| *this = None);
         self.url_state
             .update(cx, |this, cx| this.set_value(String::new(), window, cx));
     }
