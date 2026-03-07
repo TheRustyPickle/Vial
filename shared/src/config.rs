@@ -11,7 +11,7 @@ pub const MAX_VIEW_COUNT: usize = 1000;
 pub const DEFAULT_SERVER_URL: &str = "https://rustypickle.onrender.com/api/secrets";
 pub const DEFAULT_WEB_URL: &str = "https://rustypickle.onrender.com/secrets";
 
-#[derive(Serialize, Deserialize, Default, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Config {
     /// Path to save downloaded files
     pub download_path: Option<PathBuf>,
@@ -24,6 +24,22 @@ pub struct Config {
     pub database_url: Option<String>,
     pub port: Option<u16>,
     pub address: Option<String>,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            download_path: None,
+            server_url: Some(DEFAULT_SERVER_URL.to_string()),
+            max_size: Some(MAX_SIZE),
+            web_ui_url: Some(DEFAULT_WEB_URL.to_string()),
+            max_views: Some(MAX_VIEW_COUNT),
+            max_days: Some(MAX_DAY_COUNT),
+            database_url: None,
+            port: Some(8080),
+            address: Some("127.0.0.1".to_string()),
+        }
+    }
 }
 
 impl Config {
