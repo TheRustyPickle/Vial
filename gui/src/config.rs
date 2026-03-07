@@ -1,20 +1,13 @@
-use anyhow::{Context as _, Result, anyhow};
 use gpui::prelude::FluentBuilder;
 use gpui::*;
-use gpui_component::button::{Button, ButtonVariants};
-use gpui_component::group_box::{GroupBox, GroupBoxVariants};
+use gpui_component::button::Button;
 use gpui_component::input::{Input, InputEvent, InputState, NumberInput};
 use gpui_component::notification::Notification;
-use gpui_component::radio::{Radio, RadioGroup};
 use gpui_component::scroll::ScrollableElement;
 use gpui_component::tooltip::Tooltip;
-use gpui_component::{Disableable, StyledExt, WindowExt};
 use gpui_component::{IconName, h_flex, v_flex};
 use rfd::FileDialog;
-use std::env::set_current_dir;
-use std::path::PathBuf;
 use vial_shared::config::Config;
-use vial_shared::{FullSecret, SecretFile};
 
 pub struct ConfigView {
     config: Config,
@@ -33,50 +26,53 @@ impl ConfigView {
     pub fn new(config: Config, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let download_path = cx.new(|cx| {
             InputState::new(window, cx)
-                .placeholder("Enter a secret URL")
+                .placeholder("Path for downloading files from a secret")
                 .multi_line(false)
         });
 
         let server_url = cx.new(|cx| {
             InputState::new(window, cx)
-                .placeholder("Enter a secret URL")
+                .placeholder("https://yourserver.com/api/secrets")
                 .multi_line(false)
         });
-        let max_size = cx.new(|cx| {
-            InputState::new(window, cx)
-                .placeholder("Enter a secret URL")
-                .multi_line(false)
-        });
+
         let web_ui_url = cx.new(|cx| {
             InputState::new(window, cx)
-                .placeholder("Enter a secret URL")
+                .placeholder("https://yoursite.com/secrets")
+                .multi_line(false)
+        });
+
+        let max_size = cx.new(|cx| {
+            InputState::new(window, cx)
+                .placeholder("5mb = 1024 * 1024 * 5")
                 .multi_line(false)
         });
 
         let max_views = cx.new(|cx| {
             InputState::new(window, cx)
-                .placeholder("Enter a secret URL")
+                .placeholder("View count in number")
                 .multi_line(false)
         });
+
         let max_days = cx.new(|cx| {
             InputState::new(window, cx)
-                .placeholder("Enter a secret URL")
+                .placeholder("Days in number")
                 .multi_line(false)
         });
 
         let database_url = cx.new(|cx| {
             InputState::new(window, cx)
-                .placeholder("Enter a secret URL")
+                .placeholder("postgresql://postgres:asdf@127.0.0.1:5432/asdf")
                 .multi_line(false)
         });
         let port = cx.new(|cx| {
             InputState::new(window, cx)
-                .placeholder("Enter a secret URL")
+                .placeholder("Port number: 8080")
                 .multi_line(false)
         });
         let address = cx.new(|cx| {
             InputState::new(window, cx)
-                .placeholder("Enter a secret URL")
+                .placeholder("Address to bind to: 127.0.0.1")
                 .multi_line(false)
         });
 
