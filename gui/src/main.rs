@@ -1,3 +1,4 @@
+mod config;
 mod crypto;
 mod recv;
 mod send;
@@ -9,6 +10,7 @@ use gpui_component::{Root, Theme, h_flex, v_flex};
 use gpui_component_assets::Assets;
 use vial_shared::config::Config;
 
+use crate::config::ConfigView;
 use crate::recv::ReceiveView;
 use crate::send::SendView;
 
@@ -35,18 +37,21 @@ struct MainWindow {
     active_tab: MainTab,
     send_view: Entity<SendView>,
     recv_view: Entity<ReceiveView>,
+    config_view: Entity<ConfigView>,
 }
 
 impl MainWindow {
     fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let config = Config::get_config();
         let send_entity = cx.new(|cx| SendView::new(config.clone(), window, cx));
-        let recv_entity = cx.new(|cx| ReceiveView::new(config, window, cx));
+        let recv_entity = cx.new(|cx| ReceiveView::new(config.clone(), window, cx));
+        let config_entity = cx.new(|cx| ConfigView::new(config, window, cx));
 
         Self {
             active_tab: MainTab::default(),
             send_view: send_entity,
             recv_view: recv_entity,
+            config_view: config_entity,
         }
     }
 
@@ -59,7 +64,7 @@ impl MainWindow {
         match self.active_tab {
             MainTab::Send => v_flex().size_full().child(self.send_view.clone()),
             MainTab::Receive => v_flex().size_full().child(self.recv_view.clone()),
-            _ => div().child(self.send_view.clone()),
+            MainTab::Config => v_flex().size_full().child(self.config_view.clone()),
         }
     }
 }
