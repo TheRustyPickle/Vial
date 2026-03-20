@@ -144,8 +144,8 @@ impl Config {
     }
 
     #[must_use]
-    pub fn get_database_url(&self) -> String {
-        var("DATABASE_URL").unwrap_or(self.database_url.clone().unwrap())
+    pub fn get_database_url_verifier(&self) -> String {
+        var("DATABASE_URL").unwrap_or(self.database_url.clone().unwrap_or_default())
     }
 
     #[must_use]
