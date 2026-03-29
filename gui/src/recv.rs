@@ -381,8 +381,9 @@ impl ReceiveView {
         let path = std::path::Path::new(file.filename());
 
         // If path exists, try to save the file by adding (x) number, at most 10 times.
-        // If the attempt fails, ask the user to enter a new filename until a valid one is
-        // entered.
+
+        let mut saved = false;
+
         if path.exists() {
             for i in 0..10 {
                 let new_file_name = format!("{} ({})", file.filename(), i + 1);
@@ -393,12 +394,20 @@ impl ReceiveView {
                         anyhow!("Failed to save file at path {}: {e}", new_path.display())
                     })?;
 
+                    saved = true;
                     break;
                 }
             }
         } else {
             file.write(path)
                 .map_err(|e| anyhow!("Failed to save file at path {}: {e}", path.display()))?;
+            saved = true;
+        }
+
+        if !saved {
+            return Err(anyhow!(
+                "Failed to save file, likely the name already exists"
+            ));
         }
 
         Ok(())
