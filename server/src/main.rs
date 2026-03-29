@@ -18,7 +18,7 @@ async fn main() {
         .filter_level(LevelFilter::Info)
         .init();
 
-    let db_url = config.get_database_url();
+    let db_url = config.get_database_url_verified();
 
     let db_handler = get_connection(&db_url).await;
 
