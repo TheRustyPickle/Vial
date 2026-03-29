@@ -275,39 +275,49 @@ impl ConfigView {
 
     fn reset_config(&mut self, _: &ClickEvent, window: &mut Window, cx: &mut Context<Self>) {
         self.server_url.update(cx, |state, cx| {
-            state.set_value(String::new(), window, cx);
+            state.set_value(self.config.get_server_url(), window, cx);
         });
 
         self.web_ui_url.update(cx, |state, cx| {
-            state.set_value(String::new(), window, cx);
+            state.set_value(self.config.get_web_ui_url(), window, cx);
         });
 
         self.max_size.update(cx, |state, cx| {
-            state.set_value(String::new(), window, cx);
+            state.set_value(self.config.get_max_size().to_string(), window, cx);
         });
 
         self.max_days.update(cx, |state, cx| {
-            state.set_value(String::new(), window, cx);
+            state.set_value(self.config.get_max_days().to_string(), window, cx);
         });
 
         self.max_views.update(cx, |state, cx| {
-            state.set_value(String::new(), window, cx);
+            state.set_value(self.config.get_max_views().to_string(), window, cx);
         });
 
+        let download_path = if let Some(download_path) = &self.config.download_path {
+            download_path.to_string_lossy().to_string()
+        } else {
+            String::new()
+        };
+
         self.download_path.update(cx, |state, cx| {
-            state.set_value(String::new(), window, cx);
+            state.set_value(download_path, window, cx);
         });
 
         self.database_url.update(cx, |state, cx| {
-            state.set_value(String::new(), window, cx);
+            state.set_value(
+                self.config.database_url.clone().unwrap_or_default(),
+                window,
+                cx,
+            );
         });
 
         self.port.update(cx, |state, cx| {
-            state.set_value(String::new(), window, cx);
+            state.set_value(self.config.get_port().to_string(), window, cx);
         });
 
         self.address.update(cx, |state, cx| {
-            state.set_value(String::new(), window, cx);
+            state.set_value(self.config.get_address(), window, cx);
         });
     }
 
