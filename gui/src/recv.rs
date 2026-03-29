@@ -429,6 +429,10 @@ impl ReceiveView {
         self.url_state
             .update(cx, |this, cx| this.set_value(String::new(), window, cx));
     }
+
+    pub fn update_config(&mut self, config: &Config) {
+        self.config = config.clone();
+    }
 }
 
 impl Render for ReceiveView {

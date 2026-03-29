@@ -78,7 +78,8 @@ impl SendView {
         });
 
         cx.subscribe_in(&max_view_state, window, |view, state, event, window, cx| {
-            view.handle_incre_decre(window, state, cx, event);
+            let max_views = view.config.get_max_views_verified();
+            view.handle_incre_decre(window, state, cx, event, max_views);
 
             let current_value = state.read(cx).value();
 
@@ -124,7 +125,8 @@ impl SendView {
             &max_day_count_state,
             window,
             |view, state, event, window, cx| {
-                view.handle_incre_decre(window, state, cx, event);
+                let max_days = view.config.get_max_days_verified();
+                view.handle_incre_decre(window, state, cx, event, max_days);
 
                 let current_value = state.read(cx).value();
 
@@ -194,6 +196,7 @@ impl SendView {
         state: &Entity<InputState>,
         cx: &mut Context<Self>,
         event: &NumberInputEvent,
+        max_num: usize,
     ) {
         match event {
             NumberInputEvent::Step(step_action) => match step_action {
@@ -210,6 +213,13 @@ impl SendView {
                     };
 
                     let current_value = current_value + 1;
+
+                    if current_value > max_num as i32 {
+                        state.update(cx, |input, cx| {
+                            input.set_value(max_num.to_string(), window, cx);
+                        });
+                        return;
+                    }
 
                     state.update(cx, |input, cx| {
                         input.set_value(current_value.to_string(), window, cx);
@@ -593,6 +603,11 @@ impl SendView {
         });
 
         self.files.clear();
+        self.update_progress(cx);
+    }
+
+    pub fn update_config(&mut self, cx: &mut Context<Self>, config: &Config) {
+        self.config = config.clone();
         self.update_progress(cx);
     }
 }

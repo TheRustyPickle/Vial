@@ -10,7 +10,7 @@ use gpui_component::{Root, Theme, h_flex, v_flex};
 use gpui_component_assets::Assets;
 use vial_shared::config::Config;
 
-use crate::config::ConfigView;
+use crate::config::{ConfigEvent, ConfigView};
 use crate::recv::ReceiveView;
 use crate::send::SendView;
 
@@ -46,6 +46,23 @@ impl MainWindow {
         let send_entity = cx.new(|cx| SendView::new(config.clone(), window, cx));
         let recv_entity = cx.new(|cx| ReceiveView::new(config.clone(), window, cx));
         let config_entity = cx.new(|cx| ConfigView::new(config, window, cx));
+
+        let send_clone = send_entity.clone();
+        let recv_clone = recv_entity.clone();
+
+        cx.subscribe(&config_entity, move |_, _, event, cx| match event {
+            ConfigEvent::Reloaded => {
+                let config = Config::get_config();
+                send_clone.update(cx, |view, cx| {
+                    view.update_config(cx, &config);
+                });
+
+                recv_clone.update(cx, |view, _| {
+                    view.update_config(&config);
+                });
+            }
+        })
+        .detach();
 
         Self {
             active_tab: MainTab::default(),

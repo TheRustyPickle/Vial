@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use gpui::prelude::FluentBuilder;
 use gpui::*;
 use gpui_component::button::{Button, ButtonVariants};
@@ -8,6 +6,7 @@ use gpui_component::notification::Notification;
 use gpui_component::tooltip::Tooltip;
 use gpui_component::{IconName, WindowExt as _, h_flex, v_flex};
 use rfd::FileDialog;
+use std::path::PathBuf;
 use vial_shared::config::Config;
 
 pub struct ConfigView {
@@ -22,6 +21,13 @@ pub struct ConfigView {
     port: Entity<InputState>,
     address: Entity<InputState>,
 }
+
+#[derive(Clone, Copy)]
+pub enum ConfigEvent {
+    Reloaded,
+}
+
+impl EventEmitter<ConfigEvent> for ConfigView {}
 
 impl ConfigView {
     pub fn new(config: Config, window: &mut Window, cx: &mut Context<Self>) -> Self {
@@ -263,6 +269,7 @@ impl ConfigView {
         } else {
             let notification = Notification::success("Config saved successfully").title("Success");
             window.push_notification(notification, cx);
+            cx.emit(ConfigEvent::Reloaded);
         }
     }
 
