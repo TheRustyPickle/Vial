@@ -9,7 +9,7 @@ readme = "../README.md"
 homepage = "https://github.com/TheRustyPickle/Vial"
 repository = "https://github.com/TheRustyPickle/Vial"
 license = "MIT"
-keywords = ["cli", "e2ee", "secret", "secure", "vault"]
+keywords = ["e2ee", "gui", "secret", "secure", "vault"]
 categories = ["gui"]
 
 [dependencies]
