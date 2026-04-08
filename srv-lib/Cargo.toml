@@ -1,6 +1,6 @@
 [package]
 name = "vial-srv"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 description = """
 Framework-agnostic server logic for Vial
@@ -14,14 +14,18 @@ categories = ["command-line-utilities"]
 
 [dependencies]
 chrono.workspace = true
-diesel = { version = "2.3.5", features = ["chrono"] }
-diesel-async = { version = "0.7.4", features = ["bb8", "migrations", "postgres"] }
+diesel = { version = "2.3.7", features = ["chrono"] }
+diesel-async = { version = "0.8.0", features = [
+  "bb8",
+  "migrations",
+  "postgres",
+] }
 diesel_migrations = "2.3.1"
-futures-util = "0.3.31"
-rustls = { version = "0.23.36", features = ["ring"] }
-thiserror = "2.0.17"
+futures-util = "0.3.32"
+rustls = { version = "0.23.37", features = ["ring"] }
+thiserror = "2.0.18"
 tokio.workspace = true
-tokio-postgres = "0.7.15"
+tokio-postgres = "0.7.17"
 tokio-postgres-rustls = "0.13.0"
 ulid = "1.2.1"
 vial-shared.workspace = true
