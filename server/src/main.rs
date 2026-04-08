@@ -13,6 +13,8 @@ async fn main() {
 
     let config = Config::get_config();
 
+    let max_size = config.get_max_size_verified();
+
     pretty_env_logger::formatted_timed_builder()
         .format_timestamp_millis()
         .filter_level(LevelFilter::Info)
@@ -34,6 +36,7 @@ async fn main() {
         App::new()
             .app_data(Data::new(config.clone()))
             .app_data(Data::new(db_handler.clone()))
+            .app_data(web::JsonConfig::default().limit(max_size + 1000))
             .service(
                 web::scope("/api/secrets")
                     .route("/{id}", web::get().to(get_secret))
@@ -74,11 +77,15 @@ async fn create_secret(
         return server_error_to_response(ServerError::ViewAndExpireEmpty);
     }
 
-    let max_size = config.get_max_views_verified();
+    let max_size = config.get_max_size_verified();
     let max_day = config.get_max_days_verified();
     let max_view = config.get_max_views_verified();
 
     if payload.ciphertext.len() > max_size {
+        info!(
+            "Payload too large. Max size is {max_size} bytes. Gotten {}",
+            payload.ciphertext.len()
+        );
         return HttpResponse::PayloadTooLarge()
             .body("Payload too large. Max size is {MAX_SIZE} bytes");
     }
@@ -87,6 +94,11 @@ async fn create_secret(
         let max_naivetime = Utc::now().naive_utc() + Days::new(max_day as u64);
 
         if payload_day > max_naivetime {
+            info!(
+                "Payload day too large. Max day is {max_day}. Gotten {}",
+                payload_day
+            );
+
             return server_error_to_response(ServerError::InvalidExpire);
         }
     }
