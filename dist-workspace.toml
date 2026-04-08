@@ -19,3 +19,9 @@ targets = [
 ]
 create-release = false
 packages = ["vial-cli", "vial-server", "vial-gui"]
+
+[dist.dependencies.apt]
+pkg-config = "*"
+libwayland-dev = "*"
+libxkbcommon-dev = "*"
+libegl1-mesa-dev = "*"
