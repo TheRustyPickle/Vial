@@ -18,4 +18,4 @@ targets = [
   "x86_64-pc-windows-msvc",
 ]
 create-release = false
-packages = ["vial-cli", "vial-server"]
+packages = ["vial-cli", "vial-server", "vial-gui"]
