@@ -2,108 +2,23 @@ use anyhow::{Context, Result, anyhow};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE};
 use chrono::{Days, Utc};
 use clap::{Args, Parser, Subcommand};
-use dirs::config_dir;
-use serde::{Deserialize, Serialize};
 use std::env::set_current_dir;
-use std::fs::{File, create_dir_all, read};
+use std::fs::read;
 use std::io::{Write as _, stdin, stdout};
 use std::path::{Path, PathBuf};
 use vial_core::crypto::{
     decrypt_with_password, decrypt_with_random_key, encrypt_with_password, encrypt_with_random_key,
 };
+use vial_shared::config::Config;
 use vial_shared::{
     CreateSecretRequest, EncryptedPayload, FullSecretV1, Payload, SecretFile, SecretFileV1,
     SecretId, sanitize_filename,
 };
 
-const MAX_SIZE: usize = 1024 * 1024 * 5 + 200;
-const DEFAULT_SERVER_URL: &str = "https://rustypickle.onrender.com/api/secrets";
-const DEFAULT_WEB_URL: &str = "https://rustypickle.onrender.com/secrets";
-
 #[derive(Parser, Debug)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
-}
-
-#[derive(Serialize, Deserialize, Default)]
-struct Config {
-    download_path: Option<PathBuf>,
-    server_url: Option<String>,
-    max_size: Option<usize>,
-    web_ui_url: Option<String>,
-}
-
-impl Config {
-    fn get_config() -> Result<Self> {
-        let mut target_path = config_dir().unwrap();
-
-        target_path.push("Vial");
-
-        create_dir_all(&target_path)?;
-
-        target_path.push("vial.json");
-
-        if target_path.exists() {
-            let contents = read(target_path)?;
-            Ok(serde_json::from_slice(&contents)?)
-        } else {
-            let config = Config {
-                download_path: None,
-                server_url: None,
-                max_size: None,
-                web_ui_url: None,
-            };
-
-            config.save_config()?;
-
-            Ok(config)
-        }
-    }
-
-    fn set_download_path(&mut self, path: PathBuf) -> Result<()> {
-        self.download_path = Some(path);
-
-        self.save_config()?;
-
-        Ok(())
-    }
-
-    fn set_server_url(&mut self, url: String) -> Result<()> {
-        self.server_url = Some(url);
-
-        self.save_config()?;
-
-        Ok(())
-    }
-
-    fn set_web_ui_url(&mut self, url: String) -> Result<()> {
-        self.web_ui_url = Some(url);
-
-        self.save_config()?;
-
-        Ok(())
-    }
-
-    fn set_max_size(&mut self, size: usize) -> Result<()> {
-        self.max_size = Some(size);
-
-        self.save_config()?;
-
-        Ok(())
-    }
-
-    fn save_config(&self) -> Result<()> {
-        let mut target_path = config_dir().unwrap();
-
-        target_path.push("Vial");
-
-        target_path.push("vial.json");
-
-        let mut file = File::create(target_path)?;
-        serde_json::to_writer(&mut file, self)?;
-        Ok(())
-    }
 }
 
 #[derive(Subcommand, Debug)]
@@ -243,6 +158,57 @@ pub struct ConfigArgs {
     /// 10485760 (10 MB)
     #[arg(long, value_name = "BYTES")]
     pub set_max_size: Option<usize>,
+
+    /// Set the maximum views allowed for a secret
+    ///
+    /// Unless a different server is used than the default one, this value is ignored.
+    ///
+    /// Defaults to 1000 views.
+    ///
+    /// Example values:
+    /// 1000
+    /// 9999
+    #[arg(long, value_name = "VIEW COUNT")]
+    pub set_max_views: Option<usize>,
+
+    /// Set the maximum days a secret is allowed to exist
+    ///
+    /// Unless a different server is used than the default one, this value is ignored.
+    ///
+    /// Defaults to 30 days.
+    ///
+    /// Example values:
+    /// 100
+    /// 365
+    #[arg(long, value_name = "DAYS COUNT")]
+    pub set_max_days: Option<usize>,
+
+    /// Set the database URL to use when starting the server bin (vial-server)
+    ///
+    /// Defaults nothing
+    ///
+    /// Example value:
+    /// postgresql://postgres:asdf@127.0.0.1:5432/asdf
+    #[arg(long, value_name = "POSTGRES URL")]
+    pub set_database_url: Option<String>,
+
+    /// Set the port to bind to when starting the server bin (vial-server)
+    ///
+    /// Defaults to 8080.
+    ///
+    /// Example value:
+    /// 8080
+    #[arg(long, value_name = "PORT")]
+    pub set_port: Option<u16>,
+
+    /// Set the address to bind to when starting the server bin (vial-server)
+    ///
+    /// Defaults to 127.0.0.1.
+    ///
+    /// Example value:
+    /// 127.0.0.1
+    #[arg(long, value_name = "ADDRESS")]
+    pub set_address: Option<String>,
 }
 
 fn main() -> Result<()> {
@@ -300,9 +266,7 @@ fn send(
         expires_at = Some(Utc::now().naive_utc() + Days::new(expire as u64));
     }
 
-    let config = Config::get_config()
-        .context("Failed to read config")
-        .unwrap_or_default();
+    let config = Config::get_config();
 
     let mut files = Vec::with_capacity(attachments.len());
 
@@ -342,36 +306,15 @@ fn send(
     };
 
     // Only accept the size in the config if a different server is used than the default one
-    let max_size = if let Some(max_size) = config.max_size
-        && let Some(url) = &config.server_url
-        && url != DEFAULT_SERVER_URL
-    {
-        max_size
-    } else {
-        MAX_SIZE
-    };
+    let max_size = config.get_max_size_verified();
 
-    let post_url = if let Some(url) = config.server_url {
-        url
-    } else {
-        DEFAULT_SERVER_URL.to_string()
-    };
+    let post_url = config.get_server_url();
 
-    let web_ui_url = if let Some(url) = config.web_ui_url {
-        url
-    } else {
-        DEFAULT_WEB_URL.to_string()
-    };
+    let web_ui_url = config.get_web_ui_url();
 
     if blob.len() > max_size {
         return Err(anyhow!(
             "The secret is too large to be sent. Try breaking it up. Max limit is {max_size} bytes."
-        ));
-    }
-
-    if blob.len() > MAX_SIZE {
-        return Err(anyhow!(
-            "The secret is too large to be sent. Try breaking it up. Max limit is {MAX_SIZE} bytes."
         ));
     }
 
@@ -404,29 +347,28 @@ fn receive(source: String, password: bool, random_key: bool) -> Result<()> {
         return Err(anyhow!("Could not find the secret id in the secret link."));
     };
 
-    let config = Config::get_config()
-        .context("Failed to read config")
-        .unwrap_or_default();
+    if secret_id.is_empty() || secret_id.contains(' ') {
+        return Err(anyhow!("Could not find the secret id in the secret link."));
+    }
 
-    let post_url = if let Some(url) = config.server_url {
-        url
-    } else {
-        DEFAULT_SERVER_URL.to_string()
-    };
+    let config = Config::get_config();
+
+    let server_url = config.get_server_url();
 
     let key = secret_id.split_once('#');
 
     let client = reqwest::blocking::Client::new();
 
     let decrypted = if let Some((id, key)) = key {
-        let payload: EncryptedPayload = reqwest_json(client.get(format!("{post_url}/{id}")))
+        let payload: EncryptedPayload = reqwest_json(client.get(format!("{server_url}/{id}")))
             .context("Failed to fetch the secret")?;
 
         decrypt_random_key(key, &payload.payload)
             .context("Failed to decrypt using random key schema")?
     } else {
-        let payload: EncryptedPayload = reqwest_json(client.get(format!("{post_url}/{secret_id}")))
-            .context("Failed to fetch the secret")?;
+        let payload: EncryptedPayload =
+            reqwest_json(client.get(format!("{server_url}/{secret_id}")))
+                .context("Failed to fetch the secret")?;
 
         let key = rpassword::prompt_password("Enter key/password: ")
             .context("Failed to read the password")?;
@@ -456,7 +398,7 @@ fn receive(source: String, password: bool, random_key: bool) -> Result<()> {
 }
 
 fn config(args: ConfigArgs) -> Result<()> {
-    let mut config = Config::get_config().context("Failed to get config")?;
+    let mut config = Config::get_config();
 
     if let Some(dl_path) = args.set_download_path {
         config
@@ -480,6 +422,36 @@ fn config(args: ConfigArgs) -> Result<()> {
         config
             .set_web_ui_url(url.clone())
             .with_context(|| format!("Failed to set new server url {url}"))?;
+    }
+
+    if let Some(days) = args.set_max_days {
+        config
+            .set_max_days(days)
+            .with_context(|| format!("Failed to set new max days {days}"))?;
+    }
+
+    if let Some(views) = args.set_max_views {
+        config
+            .set_max_views(views)
+            .with_context(|| format!("Failed to set new max views {views}"))?;
+    }
+
+    if let Some(url) = args.set_database_url {
+        config
+            .set_database_url(url.clone())
+            .with_context(|| format!("Failed to set new database url {url}"))?;
+    }
+
+    if let Some(port) = args.set_port {
+        config
+            .set_port(port)
+            .with_context(|| format!("Failed to set new port {port}"))?;
+    }
+
+    if let Some(address) = args.set_address {
+        config
+            .set_address(address.clone())
+            .with_context(|| format!("Failed to set new address {address}"))?;
     }
 
     if args.show {

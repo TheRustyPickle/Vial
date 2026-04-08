@@ -1,29 +1,26 @@
 [package]
-name = "vial-cli"
+name = "vial-gui"
 version = "0.2.0"
 edition = "2024"
 description = """
-CLI for creating and retrieving end-to-end encrypted secrets
+GUI for creating and retrieving end-to-end encrypted secrets
 """
 readme = "../README.md"
 homepage = "https://github.com/TheRustyPickle/Vial"
 repository = "https://github.com/TheRustyPickle/Vial"
 license = "MIT"
 keywords = ["cli", "e2ee", "secret", "secure", "vault"]
-categories = ["command-line-utilities"]
-
-[[bin]]
-name = "vial"
-path = "src/main.rs"
+categories = ["GUI"]
 
 [dependencies]
 anyhow.workspace = true
 base64.workspace = true
 chrono.workspace = true
-clap = { version = "4.6.0", features = ["derive"] }
+gpui = "0.2.2"
+gpui-component = "0.5.1"
+gpui-component-assets = "0.5.1"
+regex = "1.12.3"
 reqwest.workspace = true
-rpassword = "7.4.0"
-serde.workspace = true
-serde_json.workspace = true
+rfd = "0.17.2"
 vial-core.workspace = true
 vial-shared = { workspace = true, features = ["config"] }
