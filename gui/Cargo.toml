@@ -10,7 +10,7 @@ homepage = "https://github.com/TheRustyPickle/Vial"
 repository = "https://github.com/TheRustyPickle/Vial"
 license = "MIT"
 keywords = ["cli", "e2ee", "secret", "secure", "vault"]
-categories = ["GUI"]
+categories = ["gui"]
 
 [dependencies]
 anyhow.workspace = true
