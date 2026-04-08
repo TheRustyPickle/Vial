@@ -158,6 +158,57 @@ pub struct ConfigArgs {
     /// 10485760 (10 MB)
     #[arg(long, value_name = "BYTES")]
     pub set_max_size: Option<usize>,
+
+    /// Set the maximum views allowed for a secret
+    ///
+    /// Unless a different server is used than the default one, this value is ignored.
+    ///
+    /// Defaults to 1000 views.
+    ///
+    /// Example values:
+    /// 1000
+    /// 9999
+    #[arg(long, value_name = "VIEW COUNT")]
+    pub set_max_views: Option<usize>,
+
+    /// Set the maximum days a secret is allowed to exist
+    ///
+    /// Unless a different server is used than the default one, this value is ignored.
+    ///
+    /// Defaults to 30 days.
+    ///
+    /// Example values:
+    /// 100
+    /// 365
+    #[arg(long, value_name = "DAYS COUNT")]
+    pub set_max_days: Option<usize>,
+
+    /// Set the database URL to use when starting the server bin (vial-server)
+    ///
+    /// Defaults nothing
+    ///
+    /// Example value:
+    /// postgresql://postgres:asdf@127.0.0.1:5432/asdf
+    #[arg(long, value_name = "POSTGRES URL")]
+    pub set_database_url: Option<String>,
+
+    /// Set the port to bind to when starting the server bin (vial-server)
+    ///
+    /// Defaults to 8080.
+    ///
+    /// Example value:
+    /// 8080
+    #[arg(long, value_name = "PORT")]
+    pub set_port: Option<u16>,
+
+    /// Set the address to bind to when starting the server bin (vial-server)
+    ///
+    /// Defaults to 127.0.0.1.
+    ///
+    /// Example value:
+    /// 127.0.0.1
+    #[arg(long, value_name = "ADDRESS")]
+    pub set_address: Option<String>,
 }
 
 fn main() -> Result<()> {
@@ -371,6 +422,36 @@ fn config(args: ConfigArgs) -> Result<()> {
         config
             .set_web_ui_url(url.clone())
             .with_context(|| format!("Failed to set new server url {url}"))?;
+    }
+
+    if let Some(days) = args.set_max_days {
+        config
+            .set_max_days(days)
+            .with_context(|| format!("Failed to set new max days {days}"))?;
+    }
+
+    if let Some(views) = args.set_max_views {
+        config
+            .set_max_views(views)
+            .with_context(|| format!("Failed to set new max views {views}"))?;
+    }
+
+    if let Some(url) = args.set_database_url {
+        config
+            .set_database_url(url.clone())
+            .with_context(|| format!("Failed to set new database url {url}"))?;
+    }
+
+    if let Some(port) = args.set_port {
+        config
+            .set_port(port)
+            .with_context(|| format!("Failed to set new port {port}"))?;
+    }
+
+    if let Some(address) = args.set_address {
+        config
+            .set_address(address.clone())
+            .with_context(|| format!("Failed to set new address {address}"))?;
     }
 
     if args.show {

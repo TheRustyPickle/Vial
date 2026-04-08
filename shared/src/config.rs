@@ -208,6 +208,30 @@ impl Config {
         Ok(())
     }
 
+    pub fn set_database_url(&mut self, url: String) -> Result<()> {
+        self.database_url = Some(url);
+
+        self.save_config()?;
+
+        Ok(())
+    }
+
+    pub fn set_port(&mut self, port: u16) -> Result<()> {
+        self.port = Some(port);
+
+        self.save_config()?;
+
+        Ok(())
+    }
+
+    pub fn set_address(&mut self, address: String) -> Result<()> {
+        self.address = Some(address);
+
+        self.save_config()?;
+
+        Ok(())
+    }
+
     pub fn save_config(&self) -> Result<()> {
         let mut target_path = config_dir().unwrap();
 
