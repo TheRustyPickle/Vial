@@ -27,6 +27,7 @@ The primary tool is a CLI. A web UI is provided as an optional way to view secre
 | [vial-shared](https://crates.io/crates/vial-shared)  | Shared request / response types                               |
 | [vial-srv](https://crates.io/crates/vial-srv)    | Framework-agnostic server logic/library (DB, rules, limits)   |
 | [vial-server](https://crates.io/crates/vial-server)  | Actix-web server binary using srv-lib                         |
+| [vial-gui](https://crates.io/crates/vial-gui)  | GUI built with GPUI |
 
 ## Installation
 
