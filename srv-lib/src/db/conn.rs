@@ -23,7 +23,7 @@ pub struct Handler {
 
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("src/migrations");
 
-pub async fn get_connection(url: &str) -> Handler {
+pub async fn get_connection(url: &str, max_size: u32, max_idle: Option<u32>) -> Handler {
     rustls::crypto::ring::default_provider()
         .install_default()
         .expect("Failed to install rustls crypto provider");
@@ -33,8 +33,8 @@ pub async fn get_connection(url: &str) -> Handler {
     let mgr = AsyncDieselConnectionManager::<AsyncPgConnection>::new_with_config(url, config);
 
     let conn = Pool::builder()
-        .max_size(10)
-        .min_idle(Some(5))
+        .max_size(max_size)
+        .min_idle(max_idle)
         .max_lifetime(Some(Duration::from_secs(60 * 60 * 24)))
         .idle_timeout(Some(Duration::from_secs(60 * 2)))
         .build(mgr)
