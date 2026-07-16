@@ -96,16 +96,25 @@ impl Secret {
 
         let to_return = to_return.unwrap();
 
-        if let Some(view_count) = to_return.remaining_views {
-            let new_count = view_count - 1;
+        let view_available = if let Some(view) = to_return.remaining_views {
+            view > 0
+        } else {
+            false
+        };
+        let is_expired = if let Some(expiration) = to_return.expires_at {
+            expiration < Utc::now().naive_utc()
+        } else {
+            false
+        };
 
-            let is_expired = if let Some(expiration) = to_return.expires_at {
-                expiration < Utc::now().naive_utc()
-            } else {
-                false
-            };
+        if !view_available || is_expired {
+            diesel::delete(secrets.filter(id.eq(secret_id)))
+                .execute(conn)
+                .await?;
+        } else {
+            let new_count = to_return.remaining_views.unwrap() - 1;
 
-            if new_count == 0 || is_expired {
+            if new_count == 0 {
                 diesel::delete(secrets.filter(id.eq(secret_id)))
                     .execute(conn)
                     .await?;
