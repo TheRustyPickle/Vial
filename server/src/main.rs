@@ -22,7 +22,7 @@ async fn main() {
 
     let db_url = config.get_database_url_verified();
 
-    let db_handler = get_connection(&db_url).await;
+    let db_handler = get_connection(&db_url, 5, None).await;
 
     db_handler
         .initiate_days_cleanup(config.get_max_days_verified() as i32)
@@ -36,7 +36,7 @@ async fn main() {
         App::new()
             .app_data(Data::new(config.clone()))
             .app_data(Data::new(db_handler.clone()))
-            .app_data(web::JsonConfig::default().limit(max_size + 1000))
+            .app_data(web::JsonConfig::default().limit((max_size * 4).div_ceil(3) + 1024))
             .service(
                 web::scope("/api/secrets")
                     .route("/{id}", web::get().to(get_secret))
@@ -81,21 +81,22 @@ async fn create_secret(
     let max_day = config.get_max_days_verified();
     let max_view = config.get_max_views_verified();
 
-    if payload.ciphertext.len() > max_size {
+    if payload.ciphertext.len() > max_size || payload.ciphertext.is_empty() {
         info!(
             "Payload too large. Max size is {max_size} bytes. Gotten {}",
             payload.ciphertext.len()
         );
+
         return HttpResponse::PayloadTooLarge()
-            .body("Payload too large. Max size is {MAX_SIZE} bytes");
+            .body("Payload size is invalid. Max size is {MAX_SIZE} bytes");
     }
 
     if let Some(payload_day) = payload.expires_at {
         let max_naivetime = Utc::now().naive_utc() + Days::new(max_day as u64);
 
-        if payload_day > max_naivetime {
+        if payload_day > max_naivetime || payload_day < Utc::now().naive_utc() {
             info!(
-                "Payload day too large. Max day is {max_day}. Gotten {}",
+                "Payload day is invalid. Max day is {max_day}. Gotten {}",
                 payload_day
             );
 
@@ -104,8 +105,9 @@ async fn create_secret(
     }
 
     if let Some(payload_view) = payload.max_views
-        && payload_view > max_view as i32
+        && (payload_view > max_view as i32 || payload_view < 1)
     {
+        info!("Payload view is invalid. Max view is {max_view}. Gotten {payload_view}");
         return server_error_to_response(ServerError::InvalidViewCount);
     }
 
