@@ -2,7 +2,6 @@ use anyhow::{Context, Result, anyhow};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE};
 use chrono::{Days, Utc};
 use clap::{Args, Parser, Subcommand};
-use std::env::set_current_dir;
 use std::fs::read;
 use std::io::{Write as _, stdin, stdout};
 use std::path::{Path, PathBuf};
@@ -12,7 +11,7 @@ use vial_core::crypto::{
 use vial_shared::config::Config;
 use vial_shared::{
     CreateSecretRequest, EncryptedPayload, FullSecretV1, Payload, SecretFile, SecretFileV1,
-    SecretId, sanitize_filename,
+    SecretId,
 };
 
 #[derive(Parser, Debug)]
@@ -503,65 +502,43 @@ fn decrypt_password(key: &str, payload: &[u8]) -> Result<FullSecretV1> {
 }
 
 fn save_file(file: &SecretFile, download_path: &Option<PathBuf>) -> Result<()> {
-    if let Some(path) = download_path {
-        set_current_dir(path)
-            .with_context(|| format!("Failed to change directory to {}", path.display()))?;
-    }
+    let base_dir = download_path.clone().unwrap_or_default();
+    let mut path = base_dir.join(file.filename());
 
-    let path = Path::new(file.filename());
-
-    // If path exists, try to save the file by adding (x) number, at most 10 times.
-    // If the attempt fails, ask the user to enter a new filename until a valid one is
-    // entered.
     if path.exists() {
-        let mut successful = false;
+        let mut input = String::new();
+        let suggested = numbered_filename(file.filename(), 1);
+        print!(
+            "'{path}' already exists. Enter filename [{suggested}]: ",
+            path = path.display()
+        );
+        let _ = stdout().flush();
+        stdin().read_line(&mut input)?;
 
-        for i in 0..10 {
-            let new_file_name = format!("{} ({})", file.filename(), i + 1);
-            let new_path = Path::new(&new_file_name);
-
-            if !new_path.exists() {
-                file.write(new_path).map_err(|e| {
-                    anyhow!("Failed to save file at path {}: {e}", new_path.display())
-                })?;
-
-                println!("Saved file to {}", new_path.display());
-                successful = true;
-                break;
-            }
-        }
-
-        while !successful {
-            let mut filename = String::new();
-            print!("Could not save file. Enter a new filename: ");
-            let _ = stdout().flush();
-            stdin().read_line(&mut filename)?;
-
-            let filename = filename.trim();
-            let safe_filename = sanitize_filename(filename)
-                .map_err(|e| anyhow!("Failed to sanitize filename {filename}: {e}"))?;
-
-            let new_path = Path::new(&safe_filename);
-
-            if new_path.exists() {
-                println!("File already exists.");
-            } else {
-                file.write(new_path).map_err(|e| {
-                    anyhow!(
-                        "Failed to save file at the path {}: {e}",
-                        new_path.display()
-                    )
-                })?;
-
-                successful = true;
-            }
-        }
-    } else {
-        file.write(path)
-            .map_err(|e| anyhow!("Failed to save file at path {}: {e}", path.display()))?;
-
-        println!("Saved file to {}", path.display());
+        let chosen = input.trim();
+        path = base_dir.join(if chosen.is_empty() {
+            &suggested
+        } else {
+            chosen
+        });
     }
 
+    file.write(&path)
+        .map_err(|e| anyhow!("Failed to save file at path {}: {e}", path.display()))?;
+
+    println!("Saved file to {}", path.display());
     Ok(())
+}
+
+/// Turns `file.txt` into `file (1).txt` instead of `file.txt (1)`
+fn numbered_filename(filename: &str, number: usize) -> String {
+    let path = Path::new(filename);
+
+    match (
+        path.file_stem().and_then(|s| s.to_str()),
+        path.extension().and_then(|e| e.to_str()),
+    ) {
+        (Some(stem), Some(ext)) => format!("{stem} ({number}).{ext}"),
+        _ => format!("{filename} ({number})"),
+    }
 }
