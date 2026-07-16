@@ -233,7 +233,9 @@ impl Config {
     }
 
     pub fn save_config(&self) -> Result<()> {
-        let mut target_path = config_dir().unwrap();
+        let Some(mut target_path) = config_dir() else {
+            return Err(anyhow!("Failed to get config dir"));
+        };
 
         target_path.push("Vial");
 
