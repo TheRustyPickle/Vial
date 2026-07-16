@@ -5,6 +5,7 @@ use diesel_async::{AsyncMigrationHarness, AsyncPgConnection};
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness as _, embed_migrations};
 use futures_util::FutureExt;
 use futures_util::future::BoxFuture;
+use log::error;
 use rustls::pki_types::CertificateDer;
 use rustls::pki_types::pem::PemObject;
 use rustls::{ClientConfig, RootCertStore};
@@ -163,7 +164,7 @@ impl Handler {
                 tokio::time::sleep(Duration::from_secs(60)).await;
 
                 if let Err(e) = self_clone.clear_expired_days(days).await {
-                    println!("Failed to clear expired secrets. Error: {e}");
+                    error!("Failed to clear expired secrets. Error: {e}");
                 }
             }
         });
@@ -173,7 +174,7 @@ impl Handler {
         loop {
             tokio::time::sleep(Duration::from_secs(60)).await;
             if let Err(e) = self.clear_expired().await {
-                println!("Failed to clear expired secrets. Error: {e}");
+                error!("Failed to clear expired secrets. Error: {e}");
             }
         }
     }
