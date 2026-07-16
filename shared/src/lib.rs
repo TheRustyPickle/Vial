@@ -3,6 +3,8 @@ pub mod config;
 
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
+use serde_with::base64::Base64;
+use serde_with::serde_as;
 use std::sync::Arc;
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -19,8 +21,10 @@ pub struct EncryptedPayload {
 pub struct SecretId(pub String);
 
 /// Sent to the server when creating a new secret
+#[serde_as]
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct CreateSecretRequest {
+    #[serde_as(as = "Base64")]
     pub ciphertext: Vec<u8>,
     pub expires_at: Option<NaiveDateTime>,
     pub max_views: Option<i32>,
