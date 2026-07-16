@@ -88,7 +88,7 @@ async fn create_secret(
         );
 
         return HttpResponse::PayloadTooLarge()
-            .body("Payload size is invalid. Max size is {MAX_SIZE} bytes");
+            .body(format!("Payload size is invalid. Max size is {max_size} bytes"));
     }
 
     if let Some(payload_day) = payload.expires_at {
@@ -100,7 +100,7 @@ async fn create_secret(
                 payload_day
             );
 
-            return server_error_to_response(ServerError::InvalidExpire);
+            return server_error_to_response(ServerError::InvalidExpire(max_day as i64));
         }
     }
 
@@ -108,7 +108,7 @@ async fn create_secret(
         && (payload_view > max_view as i32 || payload_view < 1)
     {
         info!("Payload view is invalid. Max view is {max_view}. Gotten {payload_view}");
-        return server_error_to_response(ServerError::InvalidViewCount);
+        return server_error_to_response(ServerError::InvalidViewCount(max_view as i32));
     }
 
     db_handler
@@ -123,8 +123,8 @@ async fn create_secret(
 fn server_error_to_response(e: ServerError) -> HttpResponse {
     match e {
         ServerError::ViewAndExpireEmpty
-        | ServerError::InvalidExpire
-        | ServerError::InvalidViewCount => HttpResponse::BadRequest().body(e.to_string()),
+        | ServerError::InvalidExpire(_)
+        | ServerError::InvalidViewCount(_) => HttpResponse::BadRequest().body(e.to_string()),
 
         ServerError::DatabaseError(e) => {
             error!("Database error: {e}");
