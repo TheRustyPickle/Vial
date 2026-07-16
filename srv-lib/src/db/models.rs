@@ -4,6 +4,7 @@ use diesel::result::Error;
 use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use ulid::Ulid;
 use vial_shared::EncryptedPayload;
+use vial_shared::config::Config;
 
 use crate::errors::ServerError;
 use crate::schema::secrets;
@@ -23,29 +24,33 @@ impl Secret {
         expires_at: Option<NaiveDateTime>,
         remaining_views: Option<i32>,
     ) -> Result<Self, ServerError> {
+        let config = Config::get_config();
+
         if expires_at.is_none() && remaining_views.is_none() {
             return Err(ServerError::ViewAndExpireEmpty);
         }
 
         if let Some(expires_at) = expires_at {
+            let max_days = config.get_max_days_verified() as i64;
             if expires_at <= Utc::now().naive_utc() {
-                return Err(ServerError::InvalidExpire);
+                return Err(ServerError::InvalidExpire(max_days));
             }
 
             let now = Utc::now().naive_utc();
 
-            if expires_at - now > Duration::days(30) {
-                return Err(ServerError::InvalidExpire);
+            if expires_at - now > Duration::days(max_days) {
+                return Err(ServerError::InvalidExpire(max_days));
             }
         }
 
         if let Some(remaining_views) = remaining_views {
+            let max_views = config.get_max_views_verified() as i32;
             if remaining_views < 1 {
-                return Err(ServerError::InvalidViewCount);
+                return Err(ServerError::InvalidViewCount(max_views));
             }
 
-            if remaining_views > 1000 {
-                return Err(ServerError::InvalidViewCount);
+            if remaining_views > max_views {
+                return Err(ServerError::InvalidViewCount(max_views));
             }
         }
 
@@ -81,52 +86,36 @@ impl Secret {
         secret_id: &str,
         conn: &mut AsyncPgConnection,
     ) -> Result<Option<Self>, Error> {
-        use crate::schema::secrets::dsl::{id, remaining_views, secrets};
+        use crate::schema::secrets::dsl::{expires_at, id, remaining_views, secrets};
 
-        let to_return = secrets
-            .filter(id.eq(secret_id))
-            .select(Self::as_select())
-            .first(conn)
-            .await
-            .optional()?;
+        let now = Utc::now().naive_utc();
 
-        if to_return.is_none() {
-            return Ok(None);
+        let secret = diesel::update(
+            secrets
+                .filter(id.eq(secret_id))
+                .filter(expires_at.is_null().or(expires_at.gt(now)))
+                .filter(remaining_views.is_null().or(remaining_views.gt(1))),
+        )
+        .set(remaining_views.eq(remaining_views - 1))
+        .returning(Self::as_returning())
+        .get_result(conn)
+        .await
+        .optional()?;
+
+        if secret.is_some() {
+            return Ok(secret);
         }
 
-        let to_return = to_return.unwrap();
-
-        let view_available = if let Some(view) = to_return.remaining_views {
-            view > 0
-        } else {
-            false
-        };
-        let is_expired = if let Some(expiration) = to_return.expires_at {
-            expiration < Utc::now().naive_utc()
-        } else {
-            false
-        };
-
-        if !view_available || is_expired {
-            diesel::delete(secrets.filter(id.eq(secret_id)))
-                .execute(conn)
-                .await?;
-        } else {
-            let new_count = to_return.remaining_views.unwrap() - 1;
-
-            if new_count == 0 {
-                diesel::delete(secrets.filter(id.eq(secret_id)))
-                    .execute(conn)
-                    .await?;
-            } else {
-                diesel::update(secrets.filter(id.eq(secret_id)))
-                    .set(remaining_views.eq(new_count))
-                    .execute(conn)
-                    .await?;
-            }
-        }
-
-        Ok(Some(to_return))
+        diesel::delete(
+            secrets
+                .filter(id.eq(secret_id))
+                .filter(expires_at.is_null().or(expires_at.gt(now)))
+                .filter(remaining_views.eq(1)),
+        )
+        .returning(Self::as_returning())
+        .get_result(conn)
+        .await
+        .optional()
     }
 
     pub async fn clear_expired(conn: &mut AsyncPgConnection) -> Result<usize, Error> {
