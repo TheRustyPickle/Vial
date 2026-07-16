@@ -11,8 +11,10 @@ use std::sync::Arc;
 use std::path::Path;
 
 /// Received via HTTPS from the server then decrypted to Payload struct
+#[serde_as]
 #[derive(Deserialize, Serialize, Clone, Debug)]
 pub struct EncryptedPayload {
+    #[serde_as(as = "Base64")]
     pub payload: Vec<u8>,
 }
 
