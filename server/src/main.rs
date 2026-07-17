@@ -87,8 +87,9 @@ async fn create_secret(
             payload.ciphertext.len()
         );
 
-        return HttpResponse::PayloadTooLarge()
-            .body(format!("Payload size is invalid. Max size is {max_size} bytes"));
+        return HttpResponse::PayloadTooLarge().body(format!(
+            "Payload size is invalid. Max size is {max_size} bytes"
+        ));
     }
 
     if let Some(payload_day) = payload.expires_at {

@@ -5,9 +5,7 @@ use gpui_component::button::{Button, ButtonVariants};
 use gpui_component::group_box::{GroupBox, GroupBoxVariants};
 use gpui_component::input::{Input, InputEvent, InputState};
 use gpui_component::notification::Notification;
-use gpui_component::radio::{Radio, RadioGroup};
 use gpui_component::scroll::ScrollableElement;
-use gpui_component::tooltip::Tooltip;
 use gpui_component::{Disableable, StyledExt, WindowExt};
 use gpui_component::{IconName, h_flex, v_flex};
 use rfd::FileDialog;
@@ -16,7 +14,7 @@ use std::path::PathBuf;
 use vial_shared::config::Config;
 use vial_shared::{FullSecret, SecretFile};
 
-use crate::crypto::{Commons, Schema, ToDecrypt};
+use crate::crypto::{Commons, ToDecrypt};
 use crate::utils::byte_size_to_readable;
 
 pub struct ReceiveView {
@@ -26,7 +24,6 @@ pub struct ReceiveView {
     // (id, key)
     decrypt_key: Entity<Option<(String, String)>>,
     decrypted_state: Option<FullSecret>,
-    schema_index: usize,
     loading: bool,
     decrypt_text: Entity<InputState>,
     download_path: Option<PathBuf>,
@@ -83,7 +80,6 @@ impl ReceiveView {
             decrypt_key,
             decrypted_state: None,
             loading: false,
-            schema_index: 0,
             decrypt_text,
             download_path: None,
         }
@@ -157,7 +153,6 @@ impl ReceiveView {
                 *state = Some((id.to_string(), key.to_string()));
                 cx.notify();
             });
-            self.schema_index = 1;
         } else {
             let input = self.key_state.clone();
             let decrypt_key = self.decrypt_key.clone();
@@ -216,12 +211,10 @@ impl ReceiveView {
 
         self.loading = true;
 
-        let schema = Schema::from_index(self.schema_index);
-
         let params = Commons {
             server_url: self.config.get_server_url(),
             web_ui_url: self.config.get_web_ui_url(),
-            schema,
+            schema: None,
         };
 
         let decrypt_task =
@@ -285,36 +278,6 @@ impl ReceiveView {
                     .on_click(cx.listener(Self::clear_url)),
             )
         }
-    }
-
-    fn show_schema_choice(
-        &mut self,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let random_radio =
-            Radio::new("random")
-                .label("Use Random key schema")
-                .tooltip(|window, cx| {
-                    Tooltip::new("Generate a random key and encrypt the content with it")
-                        .build(window, cx)
-                });
-
-        let password_radio =
-            Radio::new("password")
-                .label("Use Password schema")
-                .tooltip(|window, cx| {
-                    Tooltip::new("Encrypt the content with a password input given by the user")
-                        .build(window, cx)
-                });
-
-        RadioGroup::horizontal("options")
-            .children([password_radio, random_radio])
-            .selected_index(Some(self.schema_index))
-            .on_click(cx.listener(|view, selected_index: &usize, _, cx| {
-                view.schema_index = *selected_index;
-                cx.notify();
-            }))
     }
 
     fn copy_content(&mut self, _: &ClickEvent, _window: &mut Window, cx: &mut Context<Self>) {
@@ -572,7 +535,6 @@ impl Render for ReceiveView {
                                         .on_click(cx.listener(Self::paste_content)),
                                 ),
                         )
-                        .child(div().py_2().child(self.show_schema_choice(window, cx)))
                         .child(
                             Button::new("decrypt")
                                 .label("Submit")

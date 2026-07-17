@@ -5,9 +5,7 @@ use clap::{Args, Parser, Subcommand};
 use std::fs::read;
 use std::io::{Write as _, stdin, stdout};
 use std::path::{Path, PathBuf};
-use vial_core::crypto::{
-    decrypt_with_password, decrypt_with_random_key, encrypt_with_password, encrypt_with_random_key,
-};
+use vial_core::crypto::{decrypt, encrypt_with_password, encrypt_with_random_key};
 use vial_shared::config::Config;
 use vial_shared::{
     CreateSecretRequest, EncryptedPayload, FullSecretV1, Payload, SecretFile, SecretFileV1,
@@ -74,28 +72,8 @@ enum Command {
         ///
         /// This may be a raw secret ID (e.g. abc123)
         /// or a full URL returned by the `send` command.
-        #[arg(long, value_name = "ID|URL")]
+        #[arg(value_name = "ID|URL")]
         source: String,
-
-        /// Decrypt using a user-provided password
-        ///
-        /// If the provided source does not contain a '#<key>'
-        /// fragment, you will be prompted for a password and
-        /// the secret will be decrypted using the password-based
-        /// encryption scheme.
-        ///
-        /// This is the default behavior when no key is found.
-        #[arg(short = 'p', long)]
-        password: bool,
-
-        /// Decrypt using a random key provided manually
-        ///
-        /// Use this when the secret was encrypted with a random
-        /// key and the link does not include the '#<key>' fragment.
-        ///
-        /// You will be prompted to enter the key manually.
-        #[arg(short = 'r', long)]
-        random_key: bool,
     },
 
     /// Show or configure the current configuration
@@ -221,11 +199,7 @@ fn main() -> Result<()> {
             password,
             attachments,
         } => send(text, view_count, expire, password, attachments)?,
-        Command::Recv {
-            source,
-            password,
-            random_key,
-        } => receive(source, password, random_key)?,
+        Command::Recv { source } => receive(source)?,
         Command::Config(args) => {
             config(args)?;
         }
@@ -341,7 +315,7 @@ fn send(
     Ok(())
 }
 
-fn receive(source: String, password: bool, random_key: bool) -> Result<()> {
+fn receive(source: String) -> Result<()> {
     let Some(secret_id) = source.split('/').next_back() else {
         return Err(anyhow!("Could not find the secret id in the secret link."));
     };
@@ -362,8 +336,8 @@ fn receive(source: String, password: bool, random_key: bool) -> Result<()> {
         let payload: EncryptedPayload = reqwest_json(client.get(format!("{server_url}/{id}")))
             .context("Failed to fetch the secret")?;
 
-        decrypt_random_key(key, &payload.payload)
-            .context("Failed to decrypt using random key schema")?
+        decrypt_payload(&payload.payload, key)
+            .context("Failed to decrypt the payload with the given key")?
     } else {
         let payload: EncryptedPayload =
             reqwest_json(client.get(format!("{server_url}/{secret_id}")))
@@ -375,16 +349,8 @@ fn receive(source: String, password: bool, random_key: bool) -> Result<()> {
         // If password flag is set, use password
         // If random key flag is set, use random key
         // Otherwise, use password
-        if password {
-            decrypt_password(&key, &payload.payload)
-                .context("Failed to decrypt using password schema")?
-        } else if random_key {
-            decrypt_random_key(&key, &payload.payload)
-                .context("Failed to decrypt using random key schema")?
-        } else {
-            decrypt_password(&key, &payload.payload)
-                .context("Failed to decrypt using password schema")?
-        }
+        decrypt_payload(&payload.payload, &key)
+            .context("Failed to decrypt the payload with the given key")?
     }
     .into_shared();
 
@@ -469,36 +435,13 @@ fn reqwest_json<T: serde::de::DeserializeOwned>(
     req.send()?.error_for_status()?.json()
 }
 
-fn decrypt_random_key(key: &str, payload: &[u8]) -> Result<FullSecretV1> {
-    let decoded_key = URL_SAFE
-        .decode(key)
-        .context("Failed to decode key. Is the key valid?")?;
+fn decrypt_payload(payload: &[u8], key: &str) -> Result<FullSecretV1> {
+    let bytes = decrypt(payload, key).context("Failed to decrypt secret")?;
 
-    let arr_ref: &[u8; 32] = decoded_key
-        .as_slice()
-        .try_into()
-        .context("Failed to decode key. Is the key valid")?;
-
-    let decrypted =
-        decrypt_with_random_key(payload, arr_ref).context("Failed to decrypt secret")?;
-
-    let full_secret = Payload::from_bytes(decrypted)
+    Payload::from_bytes(bytes)
         .context("Failed to deserialize secret")?
         .to_full_secret()
-        .context("Failed to deserialize secret")?;
-
-    Ok(full_secret)
-}
-
-fn decrypt_password(key: &str, payload: &[u8]) -> Result<FullSecretV1> {
-    let decrypted = decrypt_with_password(payload, key).context("Failed to decrypt secret")?;
-
-    let full_secret = Payload::from_bytes(decrypted)
-        .context("Failed to serialize secret")?
-        .to_full_secret()
-        .context("Failed to serialize secret")?;
-
-    Ok(full_secret)
+        .context("Failed to deserialize secret")
 }
 
 fn save_file(file: &SecretFile, download_path: &Option<PathBuf>) -> Result<()> {
