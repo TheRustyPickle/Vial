@@ -80,7 +80,7 @@ impl Config {
     #[must_use]
     pub fn get_web_ui_url(&self) -> String {
         var("WEB_URL").unwrap_or(
-            self.server_url
+            self.web_ui_url
                 .clone()
                 .unwrap_or(DEFAULT_WEB_URL.to_string()),
         )
@@ -233,7 +233,9 @@ impl Config {
     }
 
     pub fn save_config(&self) -> Result<()> {
-        let mut target_path = config_dir().unwrap();
+        let Some(mut target_path) = config_dir() else {
+            return Err(anyhow!("Failed to get config dir"));
+        };
 
         target_path.push("Vial");
 

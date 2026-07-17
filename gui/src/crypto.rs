@@ -158,7 +158,7 @@ impl ToDecrypt {
         let client = Client::new();
 
         let response: EncryptedPayload = client
-            .get(format!("{}/{}", self.params.web_ui_url, self.id))
+            .get(format!("{}/{}", self.params.server_url, self.id))
             .send()
             .context("Failed to send the request")?
             .error_for_status()

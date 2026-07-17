@@ -22,10 +22,11 @@ diesel-async = { version = "0.8.0", features = [
 ] }
 diesel_migrations = "2.3.1"
 futures-util = "0.3.32"
+log.workspace = true
 rustls = { version = "0.23.37", features = ["ring"] }
 thiserror = "2.0.18"
 tokio.workspace = true
 tokio-postgres = "0.7.17"
 tokio-postgres-rustls = "0.13.0"
 ulid = "1.2.1"
-vial-shared.workspace = true
+vial-shared = { workspace = true, features = ["config"] }

@@ -1,3 +1,5 @@
+<!-- rumdl-disable-file MD033 -->
+<!-- rumdl-disable-file MD013 -->
 <div align="center"><h1>Vial</h1></div>
 <div align="center">
 <a href="https://wakatime.com/@RustyPickle"><img src="https://wakatime.com/badge/github/TheRustyPickle/Vial.svg" alt="wakatime"></a>
@@ -8,11 +10,11 @@ Vial is a small Rust project for end-to-end encrypted secret sharing.
 Secrets are encrypted on the client, sent to a server as ciphertext, and decrypted only by the recipient.
 The server never knows the decryption key or the contents of a secret.
 
-The primary tool is a CLI. A web UI is provided as an optional way to view secrets.
+The primary tool is a CLI and a GUI. A web UI is provided as an optional way to view secrets.
 
 ## What It Does
 
-- Create encrypted secrets (text or files) using a password or a random key
+- Create encrypted secrets (text or files) using a password or a random generated key
 - Upload encrypted payloads to a server
 - Fetch and decrypt secrets locally
 - Enforce expiration and view limits on the server
@@ -24,7 +26,7 @@ The primary tool is a CLI. A web UI is provided as an optional way to view secre
 |------------|------------                                                               |
 | [vial-cli](https://crates.io/crates/vial-cli)        | CLI binary (secret creation & consumption)                    |
 | [vial-core](https://crates.io/crates/vial-core)       | Cryptography primitives (encryption / decryption)             |
-| [vial-shared](https://crates.io/crates/vial-shared)  | Shared request / response types                               |
+| [vial-shared](https://crates.io/crates/vial-shared)  | Shared request / response types and config                               |
 | [vial-srv](https://crates.io/crates/vial-srv)    | Framework-agnostic server logic/library (DB, rules, limits)   |
 | [vial-server](https://crates.io/crates/vial-server)  | Actix-web server binary using srv-lib                         |
 | [vial-gui](https://crates.io/crates/vial-gui)  | GUI built with GPUI |
@@ -46,6 +48,7 @@ The primary tool is a CLI. A web UI is provided as an optional way to view secre
 
 - To install the CLI `cargo install vial-cli` and run `vial --help`
 - To install the server `cargo install vial-server`. [See here](server/README.md) to find the env variable list for the server
+- To install the GUI `cargo install vial-gui`
 
 ## Web UI
 
