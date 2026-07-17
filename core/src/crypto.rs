@@ -1,10 +1,12 @@
+use aead::Generate;
 use anyhow::{Context, Result, anyhow, bail};
 use argon2::Params as Argon2Params;
 use argon2::password_hash::SaltString;
+use argon2::password_hash::rand_core::OsRng;
 use argon2::{Algorithm, Argon2, Version};
 use base64::{Engine as _, engine::general_purpose::URL_SAFE};
 use chacha20poly1305::XNonce;
-use chacha20poly1305::aead::{Aead, AeadCore, KeyInit, OsRng};
+use chacha20poly1305::aead::{Aead, KeyInit};
 use chacha20poly1305::{Key, XChaCha20Poly1305};
 
 const BLOB_VERSION: u8 = 1;
@@ -56,10 +58,9 @@ pub fn encrypt_with_password(plaintext: &[u8], password: &str) -> Result<Vec<u8>
         )
         .map_err(|e| anyhow::anyhow!(e))?;
 
-    let cipher = XChaCha20Poly1305::new_from_slice(&key_buffer)
-        .map_err(|_| anyhow::anyhow!("Invalid key length"))?;
+    let cipher = XChaCha20Poly1305::new(&key_buffer.into());
 
-    let nonce = XChaCha20Poly1305::generate_nonce(&mut OsRng);
+    let nonce = XNonce::generate();
     let ciphertext = cipher
         .encrypt(&nonce, plaintext)
         .map_err(|_| anyhow::anyhow!("Encryption failed"))?;
@@ -122,7 +123,9 @@ pub fn decrypt_with_password(encrypted_blob: &[u8], password: &str) -> Result<Ve
     let cipher = XChaCha20Poly1305::new_from_slice(&key_buffer)
         .map_err(|_| anyhow::anyhow!("Invalid key length"))?;
 
-    let nonce = XNonce::from_slice(nonce_bytes);
+    let nonce = nonce_bytes
+        .try_into()
+        .context("Failed to convert nonce to array")?;
 
     let plaintext = cipher
         .decrypt(nonce, ciphertext)
@@ -132,10 +135,10 @@ pub fn decrypt_with_password(encrypted_blob: &[u8], password: &str) -> Result<Ve
 }
 
 pub fn encrypt_with_random_key(plaintext: &[u8]) -> Result<(Vec<u8>, [u8; 32])> {
-    let key = XChaCha20Poly1305::generate_key(&mut OsRng);
+    let key = Key::generate();
     let cipher = XChaCha20Poly1305::new(&key);
 
-    let nonce = XChaCha20Poly1305::generate_nonce(&mut OsRng);
+    let nonce = XNonce::generate();
 
     let ciphertext = cipher
         .encrypt(&nonce, plaintext)
@@ -168,9 +171,12 @@ pub fn decrypt_with_random_key(encrypted_blob: &[u8], key_bytes: &[u8; 32]) -> R
     let nonce_bytes = &encrypted_blob[HEADER_LEN..HEADER_LEN + NONCE_LEN];
     let ciphertext = &encrypted_blob[HEADER_LEN + NONCE_LEN..];
 
-    let key = Key::from_slice(key_bytes);
+    let key = key_bytes.into();
+
     let cipher = XChaCha20Poly1305::new(key);
-    let nonce = XNonce::from_slice(nonce_bytes);
+    let nonce = nonce_bytes
+        .try_into()
+        .context("Failed to convert nonce to array")?;
 
     let plaintext = cipher
         .decrypt(nonce, ciphertext)
