@@ -4,9 +4,7 @@ use chrono::{Days, Utc};
 use reqwest::blocking::Client;
 use std::path::PathBuf;
 use std::{collections::BTreeSet, fs::read};
-use vial_core::crypto::{
-    decrypt_with_password, decrypt_with_random_key, encrypt_with_password, encrypt_with_random_key,
-};
+use vial_core::crypto::{decrypt, encrypt_with_password, encrypt_with_random_key};
 use vial_shared::{
     CreateSecretRequest, EncryptedPayload, FullSecret, FullSecretV1, Payload, SecretFileV1,
     SecretId,
@@ -31,7 +29,7 @@ impl Schema {
 pub struct Commons {
     pub server_url: String,
     pub web_ui_url: String,
-    pub schema: Schema,
+    pub schema: Option<Schema>,
 }
 
 pub struct ToEncrypt {
@@ -94,7 +92,9 @@ impl ToEncrypt {
         .to_bytes()
         .context("Failed to serialize secret")?;
 
-        let (blob, key) = match self.params.schema {
+        let schema = self.params.schema.unwrap();
+
+        let (blob, key) = match schema {
             Schema::Password => {
                 let password = self.password.ok_or(anyhow!("Password is required"))?;
 
@@ -137,7 +137,7 @@ impl ToEncrypt {
             .json()
             .context("Failed to parse the response")?;
 
-        let secret_link = if let Schema::Password = self.params.schema {
+        let secret_link = if let Schema::Password = schema {
             format!("{}/{}", self.params.web_ui_url, response.0)
         } else {
             let key_b64 = URL_SAFE.encode(key.unwrap());
@@ -166,49 +166,13 @@ impl ToDecrypt {
             .json()
             .context("Failed to parse the response")?;
 
-        let result = match self.params.schema {
-            Schema::Password => self
-                .decrypt_password(&response.payload)
-                .context("Failed to decrypt using password schema"),
-            Schema::Random => self
-                .decrypt_random_key(&response.payload)
-                .context("Failed to decrypt using random key schema"),
-        }
-        .context("Failed to decrypt the secret")?;
+        let bytes = decrypt(&response.payload, &self.key).context("Failed to decrypt secret")?;
 
-        Ok(result.into_shared())
-    }
-
-    fn decrypt_random_key(&self, payload: &[u8]) -> Result<FullSecretV1> {
-        let decoded_key = URL_SAFE
-            .decode(&self.key)
-            .context("Failed to decode key. Is the key valid?")?;
-
-        let arr_ref: &[u8; 32] = decoded_key
-            .as_slice()
-            .try_into()
-            .context("Failed to decode key. Is the key valid")?;
-
-        let decrypted = decrypt_with_random_key(payload, arr_ref)
-            .context("Failed to decrypt secret with random key")?;
-
-        let full_secret = Payload::from_bytes(decrypted)
+        let result = Payload::from_bytes(bytes)
             .context("Failed to deserialize secret")?
             .to_full_secret()
             .context("Failed to deserialize secret")?;
 
-        Ok(full_secret)
-    }
-
-    fn decrypt_password(&self, payload: &[u8]) -> Result<FullSecretV1> {
-        let decrypted = decrypt_with_password(payload, &self.key)
-            .context("Failed to decrypt secret with password")?;
-
-        let full_secret = Payload::from_bytes(decrypted)
-            .context("Failed to serialize secret")?
-            .to_full_secret()
-            .context("Failed to serialize secret")?;
-
-        Ok(full_secret)
+        Ok(result.into_shared())
     }
 }
