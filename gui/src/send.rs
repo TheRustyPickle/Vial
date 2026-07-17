@@ -75,47 +75,33 @@ impl SendView {
             InputState::new(window, cx)
                 .placeholder("Enter max day count")
                 .default_value("0")
+                .pattern(Regex::new(r"^\d+$").unwrap())
         });
 
         cx.subscribe_in(&max_view_state, window, |view, state, event, window, cx| {
             let max_views = view.config.get_max_views_verified();
             view.handle_incre_decre(window, state, cx, event, max_views);
 
-            let current_value = state.read(cx).value();
-
-            if current_value.is_empty() {
-                state.update(cx, |state, cx| {
-                    state.set_value("0", window, cx);
-                });
-            }
+            view.enforce_max(window, state, cx, max_views as i32);
         })
         .detach();
 
         cx.subscribe_in(&max_view_state, window, {
-            move |_, state, ev: &InputEvent, window, cx| {
+            move |view, state, ev: &InputEvent, window, cx| {
                 if let InputEvent::Change = ev {
-                    let current_value = state.read(cx).value();
+                    let max_views = view.config.get_max_views_verified();
 
-                    if current_value.is_empty() {
-                        state.update(cx, |state, cx| {
-                            state.set_value("0", window, cx);
-                        });
-                    }
+                    view.enforce_max(window, state, cx, max_views as i32);
                 }
             }
         })
         .detach();
 
         cx.subscribe_in(&max_day_count_state, window, {
-            move |_, state, ev: &InputEvent, window, cx| {
+            move |view, state, ev: &InputEvent, window, cx| {
                 if let InputEvent::Change = ev {
-                    let current_value = state.read(cx).value();
-
-                    if current_value.is_empty() {
-                        state.update(cx, |state, cx| {
-                            state.set_value("0", window, cx);
-                        });
-                    }
+                    let max_days = view.config.get_max_days_verified();
+                    view.enforce_max(window, state, cx, max_days as i32);
                 }
             }
         })
@@ -128,13 +114,7 @@ impl SendView {
                 let max_days = view.config.get_max_days_verified();
                 view.handle_incre_decre(window, state, cx, event, max_days);
 
-                let current_value = state.read(cx).value();
-
-                if current_value.is_empty() {
-                    state.update(cx, |state, cx| {
-                        state.set_value("0", window, cx);
-                    });
-                }
+                view.enforce_max(window, state, cx, max_days as i32);
             },
         )
         .detach();
@@ -187,6 +167,42 @@ impl SendView {
             password,
             max_view_state,
             max_day_count_state,
+        }
+    }
+
+    fn enforce_max(
+        &mut self,
+        window: &mut Window,
+        state: &Entity<InputState>,
+        cx: &mut Context<Self>,
+        max: i32,
+    ) {
+        let current_value = state.read(cx).value();
+
+        if current_value.is_empty() {
+            state.update(cx, |state, cx| {
+                state.set_value("0", window, cx);
+            });
+        }
+
+        if current_value.starts_with("0") && current_value.len() > 1 {
+            let current_value = current_value[1..].to_string();
+            state.update(cx, |state, cx| {
+                state.set_value(current_value, window, cx);
+            });
+        }
+
+        let Ok(parsed_value) = current_value.parse::<i32>() else {
+            state.update(cx, |state, cx| {
+                state.set_value("0", window, cx);
+            });
+            return;
+        };
+
+        if parsed_value > max {
+            state.update(cx, |state, cx| {
+                state.set_value(max.to_string(), window, cx);
+            });
         }
     }
 
@@ -336,7 +352,7 @@ impl SendView {
         let params = Commons {
             server_url: self.config.get_server_url(),
             web_ui_url: self.config.get_web_ui_url(),
-            schema,
+            schema: Some(schema),
         };
 
         let Ok(max_days) = self.max_day_count_state.read(cx).value().parse::<usize>() else {
