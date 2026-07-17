@@ -8057,6 +8057,7 @@ dependencies = [
  "aead",
  "anyhow",
  "argon2",
+ "base64",
  "chacha20poly1305",
  "getrandom 0.2.17",
  "getrandom 0.3.4",
