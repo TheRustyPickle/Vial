@@ -25,7 +25,6 @@ impl Secret {
         max_days: i64,
         max_views: i32,
     ) -> Result<Self, ServerError> {
-
         if expires_at.is_none() && remaining_views.is_none() {
             return Err(ServerError::ViewAndExpireEmpty);
         }
