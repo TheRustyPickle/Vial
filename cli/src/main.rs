@@ -32,15 +32,17 @@ enum Command {
 
         /// Maximum number of times the secret can be viewed
         ///
-        /// Must be between 1 and 1000. If omitted, the secret
-        /// will not expire based on view count.
+        /// Must be between 1 and 1000 otherwise the value listed on the config.
+        /// Config value will be ignored unless a different server url is used.
+        /// If omitted, the secret will not expire based on view count.
         #[arg(short = 'v', long, value_name = "COUNT")]
         view_count: Option<i32>,
 
         /// Number of days the secret remains valid
         ///
-        /// Must be a positive integer up to 30. If omitted,
-        /// the secret will not expire based on time.
+        /// Must be a positive integer up to 30 otherwise the value listed on the config.
+        /// Config value will be ignored unless a different server url is used.
+        /// If omitted, the secret will not expire based on time.
         #[arg(short = 'e', long, value_name = "DAYS")]
         expire: Option<i32>,
 
@@ -221,25 +223,46 @@ fn send(
         ));
     }
 
+    let config = Config::get_config();
+
     let mut expires_at = None;
     let mut max_views = None;
 
+    let mut config_max_views = config.get_max_views_verified() as i32;
+    let mut config_max_days = config.get_max_days_verified() as i32;
+    let mut config_max_size = config.get_max_size_verified();
+
+    let server_url = config.get_server_url();
+    let web_ui_url = config.get_web_ui_url();
+
+    if server_url == "https://rustypickle.onrender.com/api/secrets" {
+        config_max_views = 1000;
+        config_max_days = 30;
+        config_max_size = 1024 * 1024 * 5;
+    }
+
     if let Some(view_count) = view_count {
-        if !(1..=1000).contains(&view_count) {
-            return Err(anyhow!("--view-count must be between 1 and 1000"));
+        if !(1..=config_max_views).contains(&view_count) {
+            return Err(anyhow!(
+                "--view-count must be between 1 and {config_max_views}"
+            ));
         }
         max_views = Some(view_count);
     }
 
     if let Some(expire) = expire {
-        if !(1..=30).contains(&expire) {
-            return Err(anyhow!("--expire must be between 1 and 30"));
+        if !(1..=config_max_days).contains(&expire) {
+            return Err(anyhow!("--expire must be between 1 and {config_max_days}"));
         }
 
         expires_at = Some(Utc::now().naive_utc() + Days::new(expire as u64));
     }
 
-    let config = Config::get_config();
+    if max_views.is_none() && expires_at.is_none() {
+        return Err(anyhow!(
+            "At least one of --view-count or --expire must be provided"
+        ));
+    }
 
     let mut files = Vec::with_capacity(attachments.len());
 
@@ -278,16 +301,9 @@ fn send(
         (blob, Some(key))
     };
 
-    // Only accept the size in the config if a different server is used than the default one
-    let max_size = config.get_max_size_verified();
-
-    let post_url = config.get_server_url();
-
-    let web_ui_url = config.get_web_ui_url();
-
-    if blob.len() > max_size {
+    if blob.len() > config_max_size {
         return Err(anyhow!(
-            "The secret is too large to be sent. Try breaking it up. Max limit is {max_size} bytes."
+            "The secret is too large to be sent. Try breaking it up. Max limit is {config_max_size} bytes."
         ));
     }
 
@@ -299,7 +315,7 @@ fn send(
 
     let client = reqwest::blocking::Client::new();
 
-    let secret_id: SecretId = reqwest_json(client.post(&post_url).json(&secret_request))
+    let secret_id: SecretId = reqwest_json(client.post(&server_url).json(&secret_request))
         .context("Failed to create new secret")?;
 
     let secret_link = if password {
