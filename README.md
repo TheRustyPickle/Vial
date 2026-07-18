@@ -1,6 +1,6 @@
 <!-- rumdl-disable-file MD033 -->
 <!-- rumdl-disable-file MD013 -->
-<div align="center"><h1>Vial</h1></div>
+<div align="center"><h1>Vial</h1></div> <!-- rumdl-disable-line MD041 -->
 <div align="center">
 <a href="https://wakatime.com/@RustyPickle"><img src="https://wakatime.com/badge/github/TheRustyPickle/Vial.svg" alt="wakatime"></a>
 </div>
@@ -37,6 +37,7 @@ The primary tool is a CLI and a GUI. A web UI is provided as an optional way to 
 
 - Clone the repository `git clone https://github.com/TheRustyPickle/Vial`
 - To run the CLI with Cargo `cargo run --release --bin vial`
+- to run the GUI with Cargo `cargo run --release --bin vial-gui`
 - To run the server with Cargo `cargo run --release --bin vial-server`
 
 **2. Run the latest Release:**
@@ -47,14 +48,14 @@ The primary tool is a CLI and a GUI. A web UI is provided as an optional way to 
 **3. Install using Cargo:**
 
 - To install the CLI `cargo install vial-cli` and run `vial --help`
-- To install the server `cargo install vial-server`. [See here](server/README.md) to find the env variable list for the server
 - To install the GUI `cargo install vial-gui`
+- To install the server `cargo install vial-server`. [See here](server/README.md) to find the env variable list for the server
 
 ## Web UI
 
 [A web UI is available](https://rustypickle.onrender.com/) with [source code](https://github.com/TheRustyPickle/My-Site/blob/main/app/src/secrets.rs) and is used as the default URL in the CLI. The site uses the same `srv-lib` and can only perform decryption on the client.
 
-[A demo secret](https://rustypickle.onrender.com/secrets/01KFZPC330S6S45221BF7XV8JR) can be viewed here with the password `password`
+[A demo secret](https://rustypickle.onrender.com/secrets/01KXTPKKRVR26XK2QWANXHHYZ6) can be viewed here with the password `password`
 
 ## Project Status & Disclaimer
 
