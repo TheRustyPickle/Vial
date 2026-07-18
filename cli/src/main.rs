@@ -188,6 +188,10 @@ pub struct ConfigArgs {
     /// 127.0.0.1
     #[arg(long, value_name = "ADDRESS")]
     pub set_address: Option<String>,
+
+    /// Clear all custom configuration and revert to defaults
+    #[arg(long, conflicts_with_all = &["set_download_path", "set_server_url", "set_web_url", "set_max_size", "set_max_views", "set_max_days", "set_database_url", "set_port", "set_address"])]
+    pub clear: bool,
 }
 
 fn main() -> Result<()> {
@@ -433,6 +437,14 @@ fn config(args: ConfigArgs) -> Result<()> {
         config
             .set_address(address.clone())
             .with_context(|| format!("Failed to set new address {address}"))?;
+    }
+
+    if args.clear {
+        let default_config = Config::default();
+        config = default_config.clone();
+        default_config
+            .save_config()
+            .with_context(|| "Failed to save default config")?;
     }
 
     if args.show {
