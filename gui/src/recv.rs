@@ -1,11 +1,6 @@
 use anyhow::{Context as _, Result, anyhow};
 use gpui::prelude::FluentBuilder;
-use gpui::{
-    AppContext, ClickEvent, ClipboardEntry, ClipboardItem, Context, Element, Entity,
-    InteractiveElement, IntoElement, IsEmpty, ParentElement, PlatformDisplay,
-    PlatformKeyboardLayout, Render, SharedString, StatefulInteractiveElement, Styled,
-    VisualContext, Window, div,
-};
+use gpui::*;
 use gpui_component::button::{Button, ButtonVariants};
 use gpui_component::group_box::{GroupBox, GroupBoxVariants};
 use gpui_component::input::{Input, InputEvent, InputState};

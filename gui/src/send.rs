@@ -1,9 +1,4 @@
-use gpui::{
-    Action, Animation, AnimationExt, AppContext, ClickEvent, Context, Element, Entity,
-    InteractiveElement, IntoElement, IsEmpty, ParentElement, PlatformDisplay,
-    PlatformKeyboardLayout, Render, ScreenCaptureSource, ScreenCaptureStream, SharedString,
-    StatefulInteractiveElement, Styled, TextAlign, VisualContext, Window, div, ease_out_quint, px,
-};
+use gpui::*;
 use gpui_component::button::{Button, ButtonVariants};
 use gpui_component::clipboard::Clipboard;
 use gpui_component::group_box::{GroupBox, GroupBoxVariants};
