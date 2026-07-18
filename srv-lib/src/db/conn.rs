@@ -134,7 +134,12 @@ impl Handler {
         Ok(())
     }
 
-    pub async fn new_secret(&self, new_secret: CreateSecretRequest) -> Result<String, ServerError> {
+    pub async fn new_secret(
+        &self,
+        new_secret: CreateSecretRequest,
+        max_days: i64,
+        max_views: i32,
+    ) -> Result<String, ServerError> {
         let mut conn = self
             .conn
             .get()
@@ -145,6 +150,8 @@ impl Handler {
             new_secret.ciphertext,
             new_secret.expires_at,
             new_secret.max_views,
+            max_days,
+            max_views,
         )?;
 
         let secret_id = secret.get_id();

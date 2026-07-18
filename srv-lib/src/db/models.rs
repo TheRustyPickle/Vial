@@ -4,7 +4,6 @@ use diesel::result::Error;
 use diesel_async::{AsyncPgConnection, RunQueryDsl};
 use ulid::Ulid;
 use vial_shared::EncryptedPayload;
-use vial_shared::config::Config;
 
 use crate::errors::ServerError;
 use crate::schema::secrets;
@@ -23,15 +22,15 @@ impl Secret {
         ciphertext: Vec<u8>,
         expires_at: Option<NaiveDateTime>,
         remaining_views: Option<i32>,
+        max_days: i64,
+        max_views: i32,
     ) -> Result<Self, ServerError> {
-        let config = Config::get_config();
 
         if expires_at.is_none() && remaining_views.is_none() {
             return Err(ServerError::ViewAndExpireEmpty);
         }
 
         if let Some(expires_at) = expires_at {
-            let max_days = config.get_max_days_verified() as i64;
             if expires_at <= Utc::now().naive_utc() {
                 return Err(ServerError::InvalidExpire(max_days));
             }
@@ -44,7 +43,6 @@ impl Secret {
         }
 
         if let Some(remaining_views) = remaining_views {
-            let max_views = config.get_max_views_verified() as i32;
             if remaining_views < 1 {
                 return Err(ServerError::InvalidViewCount(max_views));
             }

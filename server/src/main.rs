@@ -113,7 +113,7 @@ async fn create_secret(
     }
 
     db_handler
-        .new_secret(payload)
+        .new_secret(payload, max_day as i64, max_view as i32)
         .await
         .map_or_else(server_error_to_response, |id| {
             info!("Created secret with id: {id}");
