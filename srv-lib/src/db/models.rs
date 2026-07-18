@@ -55,7 +55,7 @@ impl Secret {
         }
 
         Ok(Self {
-            id: Ulid::new().to_string(),
+            id: Ulid::generate().to_string(),
             ciphertext,
             expires_at,
             remaining_views,
