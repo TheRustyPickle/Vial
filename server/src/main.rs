@@ -96,10 +96,7 @@ async fn create_secret(
         let max_naivetime = Utc::now().naive_utc() + Days::new(max_day as u64);
 
         if payload_day > max_naivetime || payload_day < Utc::now().naive_utc() {
-            info!(
-                "Payload day is invalid. Max day is {max_day}. Gotten {}",
-                payload_day
-            );
+            info!("Payload day is invalid. Max day is {max_day}. Gotten {payload_day}");
 
             return server_error_to_response(ServerError::InvalidExpire(max_day as i64));
         }

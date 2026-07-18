@@ -36,8 +36,8 @@ pub async fn get_connection(url: &str, max_size: u32, max_idle: Option<u32>) -> 
     let conn = Pool::builder()
         .max_size(max_size)
         .min_idle(max_idle)
-        .max_lifetime(Some(Duration::from_secs(60 * 60 * 24)))
-        .idle_timeout(Some(Duration::from_secs(60 * 2)))
+        .max_lifetime(Some(Duration::from_hours(24)))
+        .idle_timeout(Some(Duration::from_mins(2)))
         .build(mgr)
         .await
         .unwrap_or_else(|e| panic!("Failed to create DB connection. Error: {e}"));
@@ -168,7 +168,7 @@ impl Handler {
         let self_clone = self.clone();
         tokio::spawn(async move {
             loop {
-                tokio::time::sleep(Duration::from_secs(60)).await;
+                tokio::time::sleep(Duration::from_mins(1)).await;
 
                 if let Err(e) = self_clone.clear_expired_days(days).await {
                     error!("Failed to clear expired secrets. Error: {e}");
@@ -179,7 +179,7 @@ impl Handler {
 
     async fn initiate_expired_cleanup(&self) {
         loop {
-            tokio::time::sleep(Duration::from_secs(60)).await;
+            tokio::time::sleep(Duration::from_mins(1)).await;
             if let Err(e) = self.clear_expired().await {
                 error!("Failed to clear expired secrets. Error: {e}");
             }

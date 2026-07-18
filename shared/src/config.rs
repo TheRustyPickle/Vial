@@ -150,9 +150,7 @@ impl Config {
 
     #[must_use]
     pub fn get_port(&self) -> u16 {
-        var("PORT")
-            .map(|p| p.parse().unwrap())
-            .unwrap_or(self.port.unwrap_or(8080))
+        var("PORT").map_or(self.port.unwrap_or(8080), |p| p.parse().unwrap())
     }
 
     #[must_use]

@@ -4,7 +4,10 @@ mod recv;
 mod send;
 mod utils;
 
-use gpui::*;
+use gpui::{
+    AppContext, Application, Context, Entity, IntoElement, ParentElement, Render, Size,
+    StatefulInteractiveElement, Styled, Window, WindowOptions,
+};
 use gpui_component::tab::{Tab, TabBar};
 use gpui_component::{Root, Theme, h_flex, v_flex};
 use gpui_component_assets::Assets;

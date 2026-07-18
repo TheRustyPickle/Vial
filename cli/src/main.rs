@@ -107,9 +107,9 @@ pub struct ConfigArgs {
     /// GET /{id} to retrieve an existing secret
     ///
     /// Example:
-    ///   http://127.0.0.1:8080/secrets
+    ///   <http://127.0.0.1:8080/secrets>
     ///
-    /// Defaults to https://rustypickle.onrender.com/api/secrets
+    /// Defaults to <https://rustypickle.onrender.com/api/secrets>
     #[arg(long, value_name = "URL")]
     pub set_server_url: Option<String>,
 
@@ -120,9 +120,9 @@ pub struct ConfigArgs {
     /// /{id} parameter
     ///
     /// Example:
-    ///   http://127.0.0.1:8080/secrets
+    ///   <http://127.0.0.1:8080/secrets>
     ///
-    /// Defaults to https://rustypickle.onrender.com/secrets
+    /// Defaults to <https://rustypickle.onrender.com/secrets>
     #[arg(long, value_name = "URL")]
     pub set_web_url: Option<String>,
 
@@ -167,7 +167,7 @@ pub struct ConfigArgs {
     /// Defaults nothing
     ///
     /// Example value:
-    /// postgresql://postgres:asdf@127.0.0.1:5432/asdf
+    /// <postgresql://postgres:asdf@127.0.0.1:5432/asdf>
     #[arg(long, value_name = "POSTGRES URL")]
     pub set_database_url: Option<String>,
 
