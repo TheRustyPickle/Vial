@@ -8,6 +8,7 @@ use base64::{Engine as _, engine::general_purpose::URL_SAFE};
 use chacha20poly1305::XNonce;
 use chacha20poly1305::aead::{Aead, KeyInit};
 use chacha20poly1305::{Key, XChaCha20Poly1305};
+use zeroize::Zeroize;
 
 const BLOB_VERSION: u8 = 1;
 const HEADER_LEN: usize = 2;
@@ -59,6 +60,7 @@ pub fn encrypt_with_password(plaintext: &[u8], password: &str) -> Result<Vec<u8>
         .map_err(|e| anyhow::anyhow!(e))?;
 
     let cipher = XChaCha20Poly1305::new(&key_buffer.into());
+    key_buffer.zeroize();
 
     let nonce = XNonce::generate();
     let ciphertext = cipher
@@ -122,6 +124,7 @@ pub fn decrypt_with_password(encrypted_blob: &[u8], password: &str) -> Result<Ve
 
     let cipher = XChaCha20Poly1305::new_from_slice(&key_buffer)
         .map_err(|_| anyhow::anyhow!("Invalid key length"))?;
+    key_buffer.zeroize();
 
     let nonce = nonce_bytes
         .try_into()
@@ -199,14 +202,16 @@ pub fn decrypt(encrypted_blob: &[u8], key_or_password: &str) -> Result<Vec<u8>> 
     match Scheme::from_u8(encrypted_blob[1]) {
         Some(Scheme::Password) => decrypt_with_password(encrypted_blob, key_or_password),
         Some(Scheme::Random) => {
-            let key_bytes = URL_SAFE
+            let mut key_bytes = URL_SAFE
                 .decode(key_or_password)
                 .context("Failed to decode key (expected base64-encoded random key)")?;
             let key: &[u8; 32] = key_bytes
                 .as_slice()
                 .try_into()
                 .map_err(|_| anyhow!("Key must be exactly 32 bytes. Got {}", key_bytes.len()))?;
-            decrypt_with_random_key(encrypted_blob, key)
+            let result = decrypt_with_random_key(encrypted_blob, key)?;
+            key_bytes.zeroize();
+            Ok(result)
         }
         None => bail!("Unknown scheme byte: {}", encrypted_blob[1]),
     }
