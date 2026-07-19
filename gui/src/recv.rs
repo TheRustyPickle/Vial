@@ -487,7 +487,7 @@ impl Render for ReceiveView {
                                                             .child(
                                                                 div()
                                                                     .text_sm()
-                                                                    .child(format!("({size})",)),
+                                                                    .child(format!("({size})")),
                                                             ),
                                                     )
                                                     .child(

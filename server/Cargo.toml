@@ -1,6 +1,6 @@
 [package]
 name = "vial-server"
-version = "0.2.0"
+version = "0.4.0"
 edition = "2024"
 description = """
 Server for creating and retrieving end-to-end encrypted secrets for Vial
@@ -17,7 +17,7 @@ name = "vial-server"
 path = "src/main.rs"
 
 [dependencies]
-actix-web = "4.13.0"
+actix-web = "4.14.0"
 chrono.workspace = true
 dotenvy = "0.15.7"
 log.workspace = true

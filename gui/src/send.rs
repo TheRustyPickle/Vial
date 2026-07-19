@@ -185,7 +185,7 @@ impl SendView {
             });
         }
 
-        if current_value.starts_with("0") && current_value.len() > 1 {
+        if current_value.starts_with('0') && current_value.len() > 1 {
             let current_value = current_value[1..].to_string();
             state.update(cx, |state, cx| {
                 state.set_value(current_value, window, cx);
@@ -441,7 +441,7 @@ impl SendView {
                 |n| n.to_string_lossy().to_string(),
             );
 
-            let size = byte_size_to_readable(path.metadata().map(|m| m.len()).unwrap_or(0) as f64);
+            let size = byte_size_to_readable(path.metadata().map_or(0, |m| m.len()) as f64);
 
             let path = path.clone();
 
@@ -489,7 +489,7 @@ impl SendView {
             .pt_5()
             .with_animation(
                 "url_input",
-                Animation::new(Duration::from_millis(1000)).with_easing(ease_out_quint()),
+                Animation::new(Duration::from_secs(1)).with_easing(ease_out_quint()),
                 move |this_div, value| {
                     let target_w = window_size.as_f32();
                     let current_w = value * target_w;

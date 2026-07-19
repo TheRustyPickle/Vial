@@ -1,5 +1,9 @@
 use gpui::prelude::FluentBuilder;
-use gpui::*;
+use gpui::{
+    Action, AppContext, ClickEvent, Context, Element, Entity, EventEmitter, InteractiveElement,
+    IntoElement, IsEmpty, ParentElement, PlatformDisplay, PlatformKeyboardLayout, Render,
+    SharedString, StatefulInteractiveElement, Styled, Window, div,
+};
 use gpui_component::button::{Button, ButtonVariants};
 use gpui_component::input::{Input, InputState, NumberInput, NumberInputEvent, StepAction};
 use gpui_component::notification::Notification;
@@ -120,16 +124,16 @@ impl ConfigView {
         .detach();
 
         Self {
+            config,
             download_path,
             server_url,
             max_size,
             web_ui_url,
+            max_views,
             max_days,
             database_url,
             port,
             address,
-            config,
-            max_views,
         }
     }
 
@@ -144,7 +148,7 @@ impl ConfigView {
 
         v_flex()
             .id(SharedString::new(format!("labeled-input-{label}")))
-            .tooltip(move |window, cx| Tooltip::new(tooltip_text.to_string()).build(window, cx))
+            .tooltip(move |window, cx| Tooltip::new(tooltip_text.clone()).build(window, cx))
             .w_full()
             .gap_2()
             .child(div().text_sm().child(label.to_string()))
@@ -163,7 +167,7 @@ impl ConfigView {
 
         v_flex()
             .id("labeled-input-folder")
-            .tooltip(move |window, cx| Tooltip::new(tooltip_text.to_string()).build(window, cx))
+            .tooltip(move |window, cx| Tooltip::new(tooltip_text.clone()).build(window, cx))
             .w_full()
             .gap_2()
             .child(div().text_sm().child(label.to_string()))
@@ -183,7 +187,7 @@ impl ConfigView {
         };
 
         self.download_path.update(cx, |state, cx| {
-            state.set_value(folder.to_string_lossy().to_string(), window, cx)
+            state.set_value(folder.to_string_lossy().to_string(), window, cx);
         });
     }
 
@@ -368,7 +372,7 @@ impl ConfigView {
 
                     if current_value <= 0 {
                         state.update(cx, |input, cx| {
-                            input.set_value(String::from(""), window, cx);
+                            input.set_value(String::new(), window, cx);
                         });
                         return;
                     }

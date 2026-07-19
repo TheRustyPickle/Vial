@@ -36,8 +36,8 @@ pub async fn get_connection(url: &str, max_size: u32, max_idle: Option<u32>) -> 
     let conn = Pool::builder()
         .max_size(max_size)
         .min_idle(max_idle)
-        .max_lifetime(Some(Duration::from_secs(60 * 60 * 24)))
-        .idle_timeout(Some(Duration::from_secs(60 * 2)))
+        .max_lifetime(Some(Duration::from_hours(24)))
+        .idle_timeout(Some(Duration::from_mins(2)))
         .build(mgr)
         .await
         .unwrap_or_else(|e| panic!("Failed to create DB connection. Error: {e}"));
@@ -134,7 +134,12 @@ impl Handler {
         Ok(())
     }
 
-    pub async fn new_secret(&self, new_secret: CreateSecretRequest) -> Result<String, ServerError> {
+    pub async fn new_secret(
+        &self,
+        new_secret: CreateSecretRequest,
+        max_days: i64,
+        max_views: i32,
+    ) -> Result<String, ServerError> {
         let mut conn = self
             .conn
             .get()
@@ -145,6 +150,8 @@ impl Handler {
             new_secret.ciphertext,
             new_secret.expires_at,
             new_secret.max_views,
+            max_days,
+            max_views,
         )?;
 
         let secret_id = secret.get_id();
@@ -161,7 +168,7 @@ impl Handler {
         let self_clone = self.clone();
         tokio::spawn(async move {
             loop {
-                tokio::time::sleep(Duration::from_secs(60)).await;
+                tokio::time::sleep(Duration::from_mins(1)).await;
 
                 if let Err(e) = self_clone.clear_expired_days(days).await {
                     error!("Failed to clear expired secrets. Error: {e}");
@@ -172,7 +179,7 @@ impl Handler {
 
     async fn initiate_expired_cleanup(&self) {
         loop {
-            tokio::time::sleep(Duration::from_secs(60)).await;
+            tokio::time::sleep(Duration::from_mins(1)).await;
             if let Err(e) = self.clear_expired().await {
                 error!("Failed to clear expired secrets. Error: {e}");
             }
